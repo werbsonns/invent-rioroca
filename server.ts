@@ -168,22 +168,29 @@ app.get("/api/stats", async (req, res) => {
   }
 });
 
-app.get("/api/debug", (req, res) => {
+app.get("/api/debug", async (req, res) => {
   try {
-    const filesInCwd = fs.existsSync(process.cwd()) ? fs.readdirSync(process.cwd()) : [];
-    const filesInTmp = fs.existsSync("/tmp") ? fs.readdirSync("/tmp") : [];
+    const cwdFiles = fs.existsSync(process.cwd()) ? fs.readdirSync(process.cwd()) : ["CWD not found"];
+    const tmpFiles = fs.existsSync("/tmp") ? fs.readdirSync("/tmp") : ["/tmp not found"];
+
     res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
       env: process.env.NODE_ENV,
       cwd: process.cwd(),
       dbPath,
       dbExists: fs.existsSync(dbPath),
-      filesInCwd,
-      filesInTmp,
-      dirname: __dirname,
+      cwdFiles,
+      tmpFiles,
       dbIsInitialized: !!db,
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({
+      success: false,
+      error: err.message,
+      stack: err.stack,
+      dbPath
+    });
   }
 });
 
@@ -203,10 +210,6 @@ async function configureVite() {
 }
 
 const PORT = Number(process.env.PORT) || 3000;
-
-process.on('uncaughtException', (err) => {
-  console.error('UNCAUGHT EXCEPTION:', err);
-});
 
 if (process.env.NODE_ENV !== "production" || import.meta.url === `file://${process.argv[1]}`) {
   configureVite().then(() => {
