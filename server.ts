@@ -4,12 +4,21 @@ import Database from "better-sqlite3";
 import path from "path";
 import { fileURLToPath } from "url";
 
+import fs from "fs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const dbPath = process.env.NODE_ENV === "production"
-  ? path.join(process.cwd(), "inventory.db")
+  ? path.join("/tmp", "inventory.db")
   : path.join(__dirname, "inventory.db");
+
+// In production (Vercel), copy the initial database to /tmp if it doesn't exist
+if (process.env.NODE_ENV === "production" && !fs.existsSync(dbPath)) {
+  const initialDbPath = path.join(process.cwd(), "inventory.db");
+  if (fs.existsSync(initialDbPath)) {
+    fs.copyFileSync(initialDbPath, dbPath);
+  }
+}
 
 const db = new Database(dbPath);
 

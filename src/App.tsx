@@ -202,9 +202,20 @@ export default function App() {
         // Reset form partially
         setCarNumber('');
         setQuantity('');
+      } else {
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const errorData = await res.json();
+          alert(`Erro ao salvar registro: ${errorData.error || 'Erro desconhecido'}`);
+        } else {
+          const text = await res.text();
+          console.error('Server error (non-JSON):', text);
+          alert('Erro no servidor ao salvar registro. Verifique os logs.');
+        }
       }
     } catch (error) {
       console.error('Error saving entry:', error);
+      alert('Erro de conexão ao salvar registro.');
     }
   };
 
@@ -236,8 +247,15 @@ export default function App() {
         setTimeout(() => setSuccessMessage(false), 3000);
         fetchData(); // Use fetchData to update everything
       } else {
-        const errorData = await res.json();
-        alert(`Erro ao salvar SKU: ${errorData.error || 'Erro desconhecido'}`);
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const errorData = await res.json();
+          alert(`Erro ao salvar SKU: ${errorData.error || 'Erro desconhecido'}`);
+        } else {
+          const text = await res.text();
+          console.error('Server error (non-JSON):', text);
+          alert('Erro no servidor ao salvar SKU. Verifique os logs.');
+        }
       }
     } catch (error) {
       console.error('Error saving SKU:', error);
