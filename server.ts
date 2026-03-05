@@ -3,6 +3,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 
+import initSqlJs from "sql.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -10,44 +12,42 @@ const dbPath = process.env.NODE_ENV === "production"
   ? path.join("/tmp", "inventory.db")
   : path.join(__dirname, "inventory.db");
 
-let db: any;
+let dbInstance: any = null;
 
 async function initDb() {
-  if (db) return db;
+  if (dbInstance) return dbInstance;
 
   try {
-    // In production (Vercel), copy the initial database to /tmp if it doesn't exist
-    if (process.env.NODE_ENV === "production" && !fs.existsSync(dbPath)) {
-      const pathsToTry = [
-        path.join(process.cwd(), "inventory.db"),
-        path.join(__dirname, "..", "inventory.db"),
-        path.join(__dirname, "inventory.db")
-      ];
+    const SQL = await initSqlJs();
+    let data: Buffer | null = null;
 
-      let sourcePath = "";
-      for (const p of pathsToTry) {
+    // Load from disk if exists
+    if (fs.existsSync(dbPath)) {
+      data = fs.readFileSync(dbPath);
+    } else if (process.env.NODE_ENV === "production") {
+      // Try to find initial DB in bundle
+      const initialPaths = [
+        path.join(process.cwd(), "inventory.db"),
+        path.join(__dirname, "..", "inventory.db")
+      ];
+      for (const p of initialPaths) {
         if (fs.existsSync(p)) {
-          sourcePath = p;
+          console.log(`Loading initial DB from: ${p}`);
+          data = fs.readFileSync(p);
           break;
         }
       }
-
-      if (sourcePath) {
-        fs.copyFileSync(sourcePath, dbPath);
-      }
     }
 
-    const { default: Database } = await import("better-sqlite3");
-    db = new Database(dbPath);
+    dbInstance = new SQL.Database(data);
 
-    // Initialize schema
-    db.exec(`
+    // Ensure schema
+    dbInstance.run(`
       CREATE TABLE IF NOT EXISTS skus (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         fase TEXT NOT NULL
       );
-
       CREATE TABLE IF NOT EXISTS entries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sku_id INTEGER NOT NULL,
@@ -60,47 +60,43 @@ async function initDb() {
       );
     `);
 
-    // Seed initial data if empty
-    const { count } = db.prepare("SELECT COUNT(*) as count FROM skus").get() as { count: number };
-    if (count === 0) {
-      const insertSku = db.prepare("INSERT INTO skus (name, fase) VALUES (?, ?)");
-      insertSku.run("Item de Exemplo 1", "Almoxarifado");
-      insertSku.run("Item de Exemplo 2", "Produção");
+    // Only seed if we didn't load existing data and table is empty
+    const skusCount = dbInstance.exec("SELECT COUNT(*) FROM skus")[0]?.values[0][0];
+    if (skusCount === 0) {
+      dbInstance.run("INSERT INTO skus (name, fase) VALUES (?, ?)", ["Item Inicial", "Produção"]);
+      saveDb();
     }
-    return db;
-  } catch (err: any) {
-    console.error("CRITICAL: Database initialization failed. Using in-memory fallback.", err);
-    // Fallback Mock for stability on Vercel if native modules fail
-    const mockDb = {
-      isMock: true,
-      error: err.message,
-      data: { skus: [] as any[], entries: [] as any[] },
-      prepare: (sql: string) => ({
-        all: () => {
-          if (sql.includes("FROM skus")) return mockDb.data.skus;
-          if (sql.includes("FROM entries")) return mockDb.data.entries;
-          return [];
-        },
-        run: (...args: any[]) => {
-          if (sql.includes("INSERT INTO skus")) {
-            const id = mockDb.data.skus.length + 1;
-            mockDb.data.skus.push({ id, name: args[0], fase: args[1] });
-            return { lastInsertRowid: id };
-          }
-          if (sql.includes("INSERT INTO entries")) {
-            const id = mockDb.data.entries.length + 1;
-            mockDb.data.entries.push({ id, sku_id: args[0], date: args[1], shift: args[2], car_number: args[3], quantity: args[4] });
-            return { lastInsertRowid: id };
-          }
-          return { lastInsertRowid: 0 };
-        },
-        get: () => ({ total: 0, count: mockDb.data.skus.length })
-      }),
-      exec: () => { }
-    };
-    db = mockDb;
-    return db;
+
+    return dbInstance;
+  } catch (err) {
+    console.error("Failed to init sql.js db:", err);
+    throw err;
   }
+}
+
+function saveDb() {
+  if (!dbInstance) return;
+  try {
+    const data = dbInstance.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(dbPath, buffer);
+    console.log(`DB saved to ${dbPath}`);
+  } catch (err) {
+    console.error("Failed to save DB:", err);
+  }
+}
+
+// Helper to convert sql.js result to array of objects
+function resultToObjects(res: any[]) {
+  if (!res || res.length === 0) return [];
+  const { columns, values } = res[0];
+  return values.map((row: any[]) => {
+    const obj: any = {};
+    columns.forEach((col: string, i: number) => {
+      obj[col] = row[i];
+    });
+    return obj;
+  });
 }
 
 export const app = express();
@@ -109,9 +105,9 @@ app.use(express.json());
 // API Routes
 app.get("/api/skus", async (req, res) => {
   try {
-    const database = await initDb();
-    const skus = database.prepare("SELECT * FROM skus ORDER BY name ASC").all();
-    res.json(skus);
+    const db = await initDb();
+    const result = db.exec("SELECT * FROM skus ORDER BY name ASC");
+    res.json(resultToObjects(result));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -120,9 +116,11 @@ app.get("/api/skus", async (req, res) => {
 app.post("/api/skus", async (req, res) => {
   try {
     const { name, fase = "Produção" } = req.body;
-    const database = await initDb();
-    const info = database.prepare("INSERT INTO skus (name, fase) VALUES (?, ?)").run(name, fase);
-    res.json({ id: info.lastInsertRowid, isMock: !!database.isMock });
+    const db = await initDb();
+    db.run("INSERT INTO skus (name, fase) VALUES (?, ?)", [name, fase]);
+    saveDb();
+    const lastId = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
+    res.json({ id: lastId });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
@@ -130,9 +128,14 @@ app.post("/api/skus", async (req, res) => {
 
 app.get("/api/entries", async (req, res) => {
   try {
-    const database = await initDb();
-    const entries = database.prepare("SELECT * FROM entries ORDER BY timestamp DESC").all();
-    res.json(entries);
+    const db = await initDb();
+    const result = db.exec(`
+      SELECT entries.*, skus.name as sku_name, skus.fase as fase
+      FROM entries 
+      JOIN skus ON entries.sku_id = skus.id 
+      ORDER BY entries.timestamp DESC
+    `);
+    res.json(resultToObjects(result));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -141,24 +144,38 @@ app.get("/api/entries", async (req, res) => {
 app.post("/api/entries", async (req, res) => {
   try {
     const { sku_id, date, shift, car_number, quantity } = req.body;
-    const database = await initDb();
-    const info = database.prepare("INSERT INTO entries (sku_id, date, shift, car_number, quantity) VALUES (?, ?, ?, ?, ?)").run(sku_id, date, shift, car_number, quantity);
-    res.json({ id: info.lastInsertRowid, isMock: !!database.isMock });
+    const db = await initDb();
+    db.run(
+      "INSERT INTO entries (sku_id, date, shift, car_number, quantity) VALUES (?, ?, ?, ?, ?)",
+      [sku_id, date, shift, car_number, quantity]
+    );
+    saveDb();
+    const lastId = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
+    res.json({ id: lastId });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
 });
 
+app.get("/api/stats", async (req, res) => {
+  try {
+    const db = await initDb();
+    const resValue = db.exec("SELECT SUM(quantity) FROM entries")[0]?.values[0][0];
+    res.json({ total: resValue || 0 });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/debug", async (req, res) => {
   try {
-    const database = await initDb();
+    await initDb();
     res.json({
       success: true,
+      lib: "sql.js",
       env: process.env.NODE_ENV,
       dbPath,
       dbExists: fs.existsSync(dbPath),
-      isMock: !!database.isMock,
-      dbError: database.error || null,
       cwd: process.cwd()
     });
   } catch (err: any) {
