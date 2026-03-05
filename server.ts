@@ -7,7 +7,11 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new Database("inventory.db");
+const dbPath = process.env.NODE_ENV === "production"
+  ? path.join(process.cwd(), "inventory.db")
+  : path.join(__dirname, "inventory.db");
+
+const db = new Database(dbPath);
 
 // Initialize database
 db.exec(`
@@ -39,10 +43,9 @@ if (skuCount.count === 0) {
   insertSku.run("Tinta Acrílica Branca", "Pintura");
 }
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+export const app = express();
 
+async function configureApp() {
   app.use(express.json());
 
   // API Routes
@@ -117,15 +120,25 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(__dirname, "dist")));
+    app.use(express.static(path.join(process.cwd(), "dist")));
     app.get("*", (req, res) => {
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
+      res.sendFile(path.join(process.cwd(), "dist", "index.html"));
     });
   }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
 }
 
-startServer();
+const PORT = Number(process.env.PORT) || 3000;
+
+if (process.env.NODE_ENV !== "production" || import.meta.url === `file://${process.argv[1]}`) {
+  configureApp().then(() => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  });
+} else {
+  configureApp();
+}
+
+export default app;
+
+
