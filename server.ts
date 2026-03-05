@@ -142,6 +142,38 @@ app.post("/api/skus", async (req, res) => {
   }
 });
 
+app.put("/api/skus/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, fase } = req.body;
+    const db = await initDb();
+    db.run("UPDATE skus SET name = ?, fase = ? WHERE id = ?", [name, fase, id]);
+    saveDb();
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error updating SKU:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete("/api/skus/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = await initDb();
+    // Check if there are entries using this SKU
+    const entriesCount = db.exec("SELECT COUNT(*) FROM entries WHERE sku_id = ?", [id])[0]?.values[0][0];
+    if (entriesCount > 0) {
+      throw new Error("Não é possível excluir um SKU que possui registros de apontamento.");
+    }
+    db.run("DELETE FROM skus WHERE id = ?", [id]);
+    saveDb();
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error deleting SKU:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.get("/api/entries", async (req, res) => {
   try {
     const db = await initDb();
