@@ -1,0 +1,5 @@
+{
+  "name": "InventoryPro",
+  "description": "Sistema completo de apontamento e consulta de inventário com exportação para Excel.",
+  "requestFramePermissions": []
+}
