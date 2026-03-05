@@ -13,8 +13,8 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         registerType: 'autoUpdate',
         manifest: {
-          name: 'Inventory Pro',
-          short_name: 'InventoryPro',
+          name: 'Inventário',
+          short_name: 'Inventário',
           description: 'Sistema de Gestão de Inventário e Produção',
           theme_color: '#000000',
           background_color: '#000000',
