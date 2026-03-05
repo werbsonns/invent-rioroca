@@ -18,17 +18,21 @@ async function initDb() {
   if (dbInstance) return dbInstance;
 
   try {
+    console.log("Initializing sql.js...");
     const SQL = await initSqlJs();
+    console.log("sql.js initialized successfully.");
     let data: Buffer | null = null;
 
     // Load from disk if exists
     if (fs.existsSync(dbPath)) {
+      console.log(`Loading DB from disk: ${dbPath}`);
       data = fs.readFileSync(dbPath);
     } else if (process.env.NODE_ENV === "production") {
       // Try to find initial DB in bundle
       const initialPaths = [
         path.join(process.cwd(), "inventory.db"),
-        path.join(__dirname, "..", "inventory.db")
+        path.join(__dirname, "..", "inventory.db"),
+        path.join(__dirname, "inventory.db")
       ];
       for (const p of initialPaths) {
         if (fs.existsSync(p)) {
@@ -40,6 +44,7 @@ async function initDb() {
     }
 
     dbInstance = new SQL.Database(data);
+    console.log("SQL.Database instance created.");
 
     // Ensure schema
     dbInstance.run(`
@@ -59,6 +64,11 @@ async function initDb() {
         FOREIGN KEY (sku_id) REFERENCES skus (id)
       );
     `);
+    console.log("Schema checked/created.");
+
+    // Sanity check
+    const check = dbInstance.exec("SELECT 1");
+    console.log("Sanity check result:", check);
 
     // Only seed if we didn't load existing data and table is empty
     const skusCount = dbInstance.exec("SELECT COUNT(*) FROM skus")[0]?.values[0][0];
