@@ -2,7 +2,10 @@
     "version": 2,
     "functions": {
         "api/index.ts": {
-            "includeFiles": "inventory.db"
+            "includeFiles": [
+                "inventory.db",
+                "node_modules/sql.js/dist/sql-wasm.wasm"
+            ]
         }
     },
     "rewrites": [

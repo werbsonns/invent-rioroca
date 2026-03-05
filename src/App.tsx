@@ -209,8 +209,8 @@ export default function App() {
           alert(`Erro ao salvar registro: ${errorData.error || 'Erro desconhecido'}`);
         } else {
           const text = await res.text();
-          console.error('Server error (non-JSON):', text);
-          alert('Erro no servidor ao salvar registro. Verifique os logs.');
+          console.error('Server error response:', res.status, text);
+          alert(`Erro no servidor ao salvar registro (${res.status}). Verifique o console ou logs do Vercel.`);
         }
       }
     } catch (error) {
@@ -253,8 +253,8 @@ export default function App() {
           alert(`Erro ao salvar SKU: ${errorData.error || 'Erro desconhecido'}`);
         } else {
           const text = await res.text();
-          console.error('Server error (non-JSON):', text);
-          alert('Erro no servidor ao salvar SKU. Verifique os logs.');
+          console.error('Server error response:', res.status, text);
+          alert(`Erro no servidor ao salvar SKU (${res.status}). Verifique o console ou logs do Vercel.`);
         }
       }
     } catch (error) {

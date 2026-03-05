@@ -19,7 +19,12 @@ async function initDb() {
 
   try {
     console.log("Initializing sql.js...");
-    const SQL = await initSqlJs();
+    const wasmPath = path.join(process.cwd(), "node_modules", "sql.js", "dist", "sql-wasm.wasm");
+    console.log("WASM path:", wasmPath, "Exists:", fs.existsSync(wasmPath));
+
+    const SQL = await initSqlJs({
+      locateFile: file => file.endsWith(".wasm") ? wasmPath : file
+    });
     console.log("sql.js initialized successfully.");
     let data: Buffer | null = null;
 
