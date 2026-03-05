@@ -137,6 +137,7 @@ app.post("/api/skus", async (req, res) => {
     const lastId = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
     res.json({ id: lastId });
   } catch (err: any) {
+    console.error("Error saving SKU:", err);
     res.status(400).json({ error: err.message });
   }
 });
@@ -168,6 +169,7 @@ app.post("/api/entries", async (req, res) => {
     const lastId = db.exec("SELECT last_insert_rowid()")[0].values[0][0];
     res.json({ id: lastId });
   } catch (err: any) {
+    console.error("Error saving entry:", err);
     res.status(400).json({ error: err.message });
   }
 });
