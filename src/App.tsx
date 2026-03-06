@@ -61,7 +61,10 @@ interface ConsultaScreenProps {
   filterShift: string;
   setFilterShift: (val: string) => void;
   entries: Entry[];
+  filteredEntries: Entry[]; // New prop for filtered list
   shiftMap: Record<string, string>;
+  showAllEntries: boolean;
+  setShowAllEntries: (val: boolean) => void;
 }
 
 interface SKUManagerScreenProps {
@@ -130,6 +133,18 @@ export default function App() {
   const [editingSkuId, setEditingSkuId] = useState<number | null>(null);
   const [newSkuName, setNewSkuName] = useState('');
   const [newSkuFase, setNewSkuFase] = useState('');
+  const [showAllEntries, setShowAllEntries] = useState(false);
+
+  const filteredEntries = React.useMemo(() => {
+    return entries.filter(e =>
+      (!filterDate || e.date === filterDate) &&
+      (filterShift === 'Todos' || e.shift === filterShift)
+    );
+  }, [entries, filterDate, filterShift]);
+
+  const totalQuantity = React.useMemo(() => {
+    return filteredEntries.reduce((acc, curr) => acc + curr.quantity, 0);
+  }, [filteredEntries]);
 
   useEffect(() => {
     fetchData();
@@ -384,7 +399,10 @@ export default function App() {
           filterShift={filterShift}
           setFilterShift={setFilterShift}
           entries={entries}
+          filteredEntries={filteredEntries}
           shiftMap={shiftMap}
+          showAllEntries={showAllEntries}
+          setShowAllEntries={setShowAllEntries}
         />
       );
       case 'skus': return (
@@ -724,210 +742,225 @@ const ApontamentoScreen = ({
 const ConsultaScreen = ({
   fetchData, dateInputRef, filterDate, setFilterDate,
   showShiftModal, setShowShiftModal, filterShift, setFilterShift,
-  entries, shiftMap
-}: ConsultaScreenProps) => (
-  <div className="flex flex-col h-full overflow-hidden">
-    <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-md border-b border-zinc-800 px-4 pt-12 pb-4">
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="text-blue-500" size={24} />
-          <h1 className="text-2xl font-bold tracking-tight text-white">Consulta</h1>
-        </div>
-        <button onClick={fetchData} className="flex items-center justify-center size-9 rounded-full bg-zinc-900 active:opacity-60 transition-opacity">
-          <RefreshCcw size={18} className="text-blue-500" />
-        </button>
-      </div>
-      <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-        <div className="relative">
-          <input
-            type="date"
-            ref={dateInputRef}
-            className="absolute inset-0 w-0 h-0 opacity-0 pointer-events-none"
-            onChange={(e) => setFilterDate(e.target.value)}
-          />
-          <button
-            onClick={() => dateInputRef.current?.showPicker()}
-            className={`flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full px-4 active:scale-95 transition-transform ${filterDate ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-zinc-900 border border-zinc-800 text-zinc-400'}`}
-          >
-            <Calendar size={16} />
-            <p className="text-sm font-semibold">{filterDate ? new Date(filterDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : 'Data'}</p>
+  entries, filteredEntries, shiftMap, showAllEntries, setShowAllEntries
+}: ConsultaScreenProps) => {
+  const totalQuantity = filteredEntries.reduce((acc, curr) => acc + curr.quantity, 0);
+  const displayedEntries = showAllEntries ? filteredEntries : filteredEntries.slice(0, 10);
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-md border-b border-zinc-800 px-4 pt-12 pb-4">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="text-blue-500" size={24} />
+            <h1 className="text-2xl font-bold tracking-tight text-white">Consulta</h1>
+          </div>
+          <button onClick={fetchData} className="flex items-center justify-center size-9 rounded-full bg-zinc-900 active:opacity-60 transition-opacity">
+            <RefreshCcw size={18} className="text-blue-500" />
           </button>
         </div>
-        <button
-          onClick={() => setShowShiftModal(true)}
-          className={`flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full border px-4 active:scale-95 transition-transform ${filterShift !== 'Todos' ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-500 shadow-lg shadow-emerald-500/10' : 'bg-zinc-900 border-zinc-800 text-zinc-400'}`}
-        >
-          <Clock size={16} />
-          <p className="text-sm font-semibold">{filterShift === 'Todos' ? 'Turno' : `Turno ${filterShift}`}</p>
-        </button>
-        <button
-          onClick={() => {
-            setFilterDate(null);
-            setFilterShift('Todos');
-          }}
-          className="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-zinc-900 border border-zinc-800 px-4 text-zinc-400 active:scale-95 transition-transform"
-        >
-          <Filter size={16} className={filterDate || filterShift !== 'Todos' ? 'text-blue-500' : ''} />
-          <p className="text-sm font-medium">Limpar</p>
-        </button>
-      </div>
-    </header>
-
-    <main className="flex-1 px-4 py-6 space-y-8 overflow-y-auto">
-      <section className="relative">
-        <div className="relative overflow-hidden flex flex-col items-start justify-center rounded-2xl p-6 bg-zinc-900 border-2 border-blue-500/40 shadow-[0_0_20px_rgba(10,132,255,0.15)]">
-          <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/10 rounded-full -mr-16 -mt-16 blur-3xl"></div>
-          <div className="flex items-center gap-2 mb-2">
-            <Database size={16} className="text-blue-500" />
-            <p className="text-blue-500 font-bold text-xs uppercase tracking-widest">Total Acumulado</p>
+        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <div className="relative">
+            <input
+              type="date"
+              ref={dateInputRef}
+              className="absolute inset-0 w-0 h-0 opacity-0 pointer-events-none"
+              onChange={(e) => setFilterDate(e.target.value)}
+            />
+            <button
+              onClick={() => dateInputRef.current?.showPicker()}
+              className={`flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full px-4 active:scale-95 transition-transform ${filterDate ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-zinc-900 border border-zinc-800 text-zinc-400'}`}
+            >
+              <Calendar size={16} />
+              <p className="text-sm font-semibold">{filterDate ? new Date(filterDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : 'Data'}</p>
+            </button>
           </div>
-          <div className="flex items-baseline gap-2">
-            <h2 className="text-5xl font-black tracking-tighter text-white">
-              {entries
-                .filter(e => (!filterDate || e.date === filterDate) && (filterShift === 'Todos' || e.shift === filterShift))
-                .reduce((acc, curr) => acc + curr.quantity, 0)
-                .toLocaleString()}
-            </h2>
-            <span className="text-lg font-semibold text-zinc-400">peças</span>
-          </div>
-          <div className="mt-6 flex items-center gap-2 text-[11px] font-medium text-zinc-500 bg-black/30 px-3 py-1.5 rounded-full border border-zinc-800">
-            <Check size={14} className="text-green-500" />
-            <span>Sincronizado com Excel agora</span>
-          </div>
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex items-center justify-between px-1">
-          <h3 className="text-lg font-bold text-white">Lançamentos Recentes</h3>
-          <button className="text-blue-500 text-sm font-semibold active:opacity-70">Ver Tudo</button>
-        </div>
-        <div className="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
-          <div className="grid grid-cols-12 px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 border-b border-zinc-800 bg-white/5 notranslate">
-            <div className="col-span-3">DATA</div>
-            <div className="col-span-4">SKU</div>
-            <div className="col-span-2">TURNO</div>
-            <div className="col-span-3 text-right">QTD.</div>
-          </div>
-          <div className="divide-y divide-zinc-800">
-            {entries
-              .filter(e => (!filterDate || e.date === filterDate) && (filterShift === 'Todos' || e.shift === filterShift))
-              .slice(0, 10)
-              .map((entry) => (
-                <div key={entry.id} className="grid grid-cols-12 items-center px-5 py-4 active:bg-zinc-800 transition-colors">
-                  <div className="col-span-3 text-xs font-bold text-zinc-400">
-                    {new Date(entry.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                  </div>
-                  <div className="col-span-4 text-sm font-bold text-white truncate pr-2 notranslate">{entry.sku_name}</div>
-                  <div className="col-span-2 text-xs font-bold text-blue-500 bg-blue-500/10 w-fit px-2 py-0.5 rounded notranslate">
-                    {shiftMap[entry.shift] || entry.shift}
-                  </div>
-                  <div className="col-span-3 text-right text-blue-500 font-bold text-base">{entry.quantity}</div>
-                </div>
-              ))}
-          </div>
-        </div>
-        <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-              <BarChart3 size={18} className="text-blue-500" />
-              Produtividade por Turno
-            </h3>
-            <span className="text-[10px] font-bold text-zinc-500 bg-black/40 px-2 py-1 rounded-md border border-zinc-800 italic">Total por Qtd.</span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-6 items-end h-32 pt-2">
-            {['A', 'B', 'C'].map((s) => {
-              const shiftQuantity = entries
-                .filter(e => (!filterDate || e.date === filterDate) && e.shift === s)
-                .reduce((acc, curr) => acc + curr.quantity, 0);
-
-              const maxQuantity = Math.max(...['A', 'B', 'C'].map(shift =>
-                entries
-                  .filter(e => (!filterDate || e.date === filterDate) && e.shift === shift)
-                  .reduce((acc, curr) => acc + curr.quantity, 0)
-              ), 1);
-
-              const percentage = (shiftQuantity / maxQuantity) * 100;
-
-              return (
-                <div key={s} className="flex flex-col items-center gap-3 h-full justify-end group">
-                  <div className="relative w-full flex flex-col items-center justify-end h-full">
-                    {shiftQuantity > 0 && (
-                      <motion.div
-                        initial={{ height: 0 }}
-                        animate={{ height: `${percentage}%` }}
-                        className="w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-t-lg relative shadow-[0_0_15px_rgba(59,130,246,0.2)] group-hover:from-blue-500 group-hover:to-blue-300 transition-all duration-500"
-                      >
-                        <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-zinc-800 text-white text-[10px] font-black px-2 py-0.5 rounded-full border border-white/10 shadow-sm shadow-black/50">
-                          {shiftQuantity}
-                        </div>
-                      </motion.div>
-                    )}
-                    {shiftQuantity === 0 && (
-                      <div className="w-full h-1 bg-zinc-800 rounded-full opacity-50"></div>
-                    )}
-                  </div>
-                  <span className="text-xs font-black text-zinc-500 group-hover:text-blue-500 transition-colors uppercase">Turno {s}</span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="pt-2 flex items-center justify-center gap-4 text-[10px] text-zinc-500 font-medium">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-              <span>Volume de Produção</span>
-            </div>
-            <div className="h-3 w-px bg-zinc-800"></div>
-            <p>
-              {entries.filter(e => (!filterDate || e.date === filterDate) && (filterShift === 'Todos' || e.shift === filterShift)).length} Registros
-            </p>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <AnimatePresence>
-      {showShiftModal && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setShowShiftModal(false)}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-          />
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 bg-zinc-900 rounded-t-3xl z-50 p-6 pb-12 max-w-md mx-auto border-t border-white/10"
+          <button
+            onClick={() => setShowShiftModal(true)}
+            className={`flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full border px-4 active:scale-95 transition-transform ${filterShift !== 'Todos' ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-500 shadow-lg shadow-emerald-500/10' : 'bg-zinc-900 border-zinc-800 text-zinc-400'}`}
           >
-            <div className="w-12 h-1.5 bg-zinc-800 rounded-full mx-auto mb-6" />
-            <h3 className="text-lg font-bold text-white mb-4 notranslate">Turno</h3>
-            <div className="space-y-2">
-              {['Todos', 'A', 'B', 'C'].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => {
-                    setFilterShift(s);
-                    setShowShiftModal(false);
-                  }}
-                  className={`w-full h-14 rounded-xl flex items-center justify-between px-5 transition-all notranslate ${filterShift === s ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}
-                >
-                  <span className="font-semibold notranslate">{s}</span>
-                  {filterShift === s && <Check size={20} />}
-                </button>
-              ))}
+            <Clock size={16} />
+            <p className="text-sm font-semibold">{filterShift === 'Todos' ? 'Turno' : `Turno ${filterShift}`}</p>
+          </button>
+          <button
+            onClick={() => {
+              setFilterDate(null);
+              setFilterShift('Todos');
+            }}
+            className="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-zinc-900 border border-zinc-800 px-4 text-zinc-400 active:scale-95 transition-transform"
+          >
+            <Filter size={16} className={filterDate || filterShift !== 'Todos' ? 'text-blue-500' : ''} />
+            <p className="text-sm font-medium">Limpar</p>
+          </button>
+        </div>
+      </header>
+
+      <main className="flex-1 px-4 py-6 space-y-8 overflow-y-auto">
+        <section className="relative">
+          <div className="relative overflow-hidden flex flex-col items-start justify-center rounded-2xl p-6 bg-zinc-900 border-2 border-blue-500/40 shadow-[0_0_20px_rgba(10,132,255,0.15)]">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/10 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+            <div className="flex items-center gap-2 mb-2">
+              <Database size={16} className="text-blue-500" />
+              <p className="text-blue-500 font-bold text-xs uppercase tracking-widest">Total Acumulado</p>
             </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  </div>
-);
+            <div className="flex items-baseline gap-2">
+              <h2 className="text-5xl font-black tracking-tighter text-white">
+                {totalQuantity.toLocaleString()}
+              </h2>
+              <span className="text-lg font-semibold text-zinc-400">peças</span>
+            </div>
+            <div className="mt-6 flex items-center gap-2 text-[11px] font-medium text-zinc-500 bg-black/30 px-3 py-1.5 rounded-full border border-zinc-800">
+              <Check size={14} className="text-green-500" />
+              <span>Sincronizado com Banco de Dados</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-lg font-bold text-white">Lançamentos Recentes</h3>
+            {filteredEntries.length > 10 && (
+              <button
+                onClick={() => setShowAllEntries(!showAllEntries)}
+                className="text-blue-500 text-sm font-semibold active:opacity-70"
+              >
+                {showAllEntries ? 'Ver Menos' : 'Ver Tudo'}
+              </button>
+            )}
+          </div>
+
+          {filteredEntries.length > 0 ? (
+            <div className="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
+              <div className="grid grid-cols-12 px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 border-b border-zinc-800 bg-white/5 notranslate">
+                <div className="col-span-3">DATA</div>
+                <div className="col-span-4">SKU</div>
+                <div className="col-span-2">TURNO</div>
+                <div className="col-span-3 text-right">QTD.</div>
+              </div>
+              <div className="divide-y divide-zinc-800">
+                {displayedEntries.map((entry) => (
+                  <div key={entry.id} className="grid grid-cols-12 items-center px-5 py-4 active:bg-zinc-800 transition-colors">
+                    <div className="col-span-3 text-xs font-bold text-zinc-400">
+                      {new Date(entry.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                    </div>
+                    <div className="col-span-4 text-sm font-bold text-white truncate pr-2 notranslate">{entry.sku_name}</div>
+                    <div className="col-span-2 text-xs font-bold text-blue-500 bg-blue-500/10 w-fit px-2 py-0.5 rounded notranslate">
+                      {shiftMap[entry.shift] || entry.shift}
+                    </div>
+                    <div className="col-span-3 text-right text-blue-500 font-bold text-base">{entry.quantity}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-zinc-900/50 rounded-2xl border border-zinc-800/50 p-12 text-center">
+              <Filter size={48} className="mx-auto text-zinc-700 mb-4 opacity-20" />
+              <p className="text-zinc-500 font-medium">Nenhum registro encontrado para os filtros selecionados.</p>
+            </div>
+          )}
+
+          <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <BarChart3 size={18} className="text-blue-500" />
+                Produtividade por Turno
+              </h3>
+              <span className="text-[10px] font-bold text-zinc-500 bg-black/40 px-2 py-1 rounded-md border border-zinc-800 italic">Total por Qtd.</span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-6 items-end h-32 pt-2">
+              {['A', 'B', 'C'].map((s) => {
+                const shiftQuantity = filteredEntries
+                  .filter(e => e.shift === s)
+                  .reduce((acc, curr) => acc + curr.quantity, 0);
+
+                const maxQuantity = Math.max(...['A', 'B', 'C'].map(shift =>
+                  filteredEntries
+                    .filter(e => e.shift === shift)
+                    .reduce((acc, curr) => acc + curr.quantity, 0)
+                ), 1);
+
+                const percentage = (shiftQuantity / maxQuantity) * 100;
+
+                return (
+                  <div key={s} className="flex flex-col items-center gap-3 h-full justify-end group">
+                    <div className="relative w-full flex flex-col items-center justify-end h-full">
+                      {shiftQuantity > 0 && (
+                        <motion.div
+                          initial={{ height: 0 }}
+                          animate={{ height: `${percentage}%` }}
+                          className="w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-t-lg relative shadow-[0_0_15px_rgba(59,130,246,0.2)] group-hover:from-blue-500 group-hover:to-blue-300 transition-all duration-500"
+                        >
+                          <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-zinc-800 text-white text-[10px] font-black px-2 py-0.5 rounded-full border border-white/10 shadow-sm shadow-black/50">
+                            {shiftQuantity}
+                          </div>
+                        </motion.div>
+                      )}
+                      {shiftQuantity === 0 && (
+                        <div className="w-full h-1 bg-zinc-800 rounded-full opacity-50"></div>
+                      )}
+                    </div>
+                    <span className="text-xs font-black text-zinc-500 group-hover:text-blue-500 transition-colors uppercase">Turno {s}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-2 flex items-center justify-center gap-4 text-[10px] text-zinc-500 font-medium">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                <span>Volume de Produção</span>
+              </div>
+              <div className="h-3 w-px bg-zinc-800"></div>
+              <p>
+                {filteredEntries.length} Registros
+              </p>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <AnimatePresence>
+        {showShiftModal && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowShiftModal(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 bg-zinc-900 rounded-t-3xl z-50 p-6 pb-12 max-w-md mx-auto border-t border-white/10"
+            >
+              <div className="w-12 h-1.5 bg-zinc-800 rounded-full mx-auto mb-6" />
+              <h3 className="text-lg font-bold text-white mb-4 notranslate">Turno</h3>
+              <div className="space-y-2">
+                {['Todos', 'A', 'B', 'C'].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => {
+                      setFilterShift(s);
+                      setShowShiftModal(false);
+                    }}
+                    className={`w-full h-14 rounded-xl flex items-center justify-between px-5 transition-all notranslate ${filterShift === s ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}
+                  >
+                    <span className="font-semibold notranslate">{s}</span>
+                    {filterShift === s && <Check size={20} />}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 const SKUManagerScreen = ({
   skus, skuSearch, setSkuSearch, handleDeleteSku, setEditingSkuId,
