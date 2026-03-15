@@ -105,6 +105,17 @@ app.get("/api/entries", async (req, res) => {
   }
 });
 
+app.delete("/api/entries/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await sql`DELETE FROM entries WHERE id = ${id}`;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error deleting entry:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.post("/api/entries", async (req, res) => {
   try {
     const { sku_id, date, shift, car_number, quantity } = req.body;

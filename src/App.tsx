@@ -65,6 +65,7 @@ interface ConsultaScreenProps {
   shiftMap: Record<string, string>;
   showAllEntries: boolean;
   setShowAllEntries: (val: boolean) => void;
+  setSuccessMessage: (val: boolean) => void;
 }
 
 interface SKUManagerScreenProps {
@@ -403,6 +404,7 @@ export default function App() {
           shiftMap={shiftMap}
           showAllEntries={showAllEntries}
           setShowAllEntries={setShowAllEntries}
+          setSuccessMessage={setSuccessMessage}
         />
       );
       case 'skus': return (
@@ -742,8 +744,27 @@ const ApontamentoScreen = ({
 const ConsultaScreen = ({
   fetchData, dateInputRef, filterDate, setFilterDate,
   showShiftModal, setShowShiftModal, filterShift, setFilterShift,
-  entries, filteredEntries, shiftMap, showAllEntries, setShowAllEntries
+  entries, filteredEntries, shiftMap, showAllEntries, setShowAllEntries,
+  setSuccessMessage
 }: ConsultaScreenProps) => {
+  const handleDeleteEntry = async (id: number) => {
+    if (!window.confirm('Deseja realmente excluir este apontamento?')) return;
+
+    try {
+      const res = await fetch(`/api/entries/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setSuccessMessage(true);
+        setTimeout(() => setSuccessMessage(false), 3000);
+        fetchData();
+      } else {
+        alert('Erro ao excluir apontamento.');
+      }
+    } catch (error) {
+      console.error('Error deleting entry:', error);
+      alert('Erro de conexão ao excluir apontamento.');
+    }
+  };
+
   const totalQuantity = filteredEntries.reduce((acc, curr) => acc + curr.quantity, 0);
   const displayedEntries = showAllEntries ? filteredEntries : filteredEntries.slice(0, 10);
 
@@ -831,23 +852,35 @@ const ConsultaScreen = ({
 
           {filteredEntries.length > 0 ? (
             <div className="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
-              <div className="grid grid-cols-12 px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 border-b border-zinc-800 bg-white/5 notranslate">
-                <div className="col-span-3">DATA</div>
-                <div className="col-span-4">SKU</div>
-                <div className="col-span-2">TURNO</div>
-                <div className="col-span-3 text-right">QTD.</div>
+              <div className="grid grid-cols-[1fr_2fr_1fr_1fr_auto] px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500 border-b border-zinc-800 bg-white/5 notranslate gap-2">
+                <div>DATA</div>
+                <div>SKU</div>
+                <div className="text-center">TURNO</div>
+                <div className="text-right">QTD.</div>
+                <div className="w-8"></div>
               </div>
               <div className="divide-y divide-zinc-800 max-h-64 overflow-y-auto no-scrollbar">
                 {displayedEntries.map((entry) => (
-                  <div key={entry.id} className="grid grid-cols-12 items-center px-5 py-4 active:bg-zinc-800 transition-colors">
-                    <div className="col-span-3 text-xs font-bold text-zinc-400">
+                  <div key={entry.id} className="grid grid-cols-[1fr_2fr_1fr_1fr_auto] items-center px-5 py-4 active:bg-zinc-800 transition-colors gap-2">
+                    <div className="text-xs font-bold text-zinc-400">
                       {new Date(entry.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                     </div>
-                    <div className="col-span-4 text-sm font-bold text-white truncate pr-2 notranslate">{entry.sku_name}</div>
-                    <div className="col-span-2 text-xs font-bold text-blue-500 bg-blue-500/10 w-fit px-2 py-0.5 rounded notranslate">
-                      {shiftMap[entry.shift] || entry.shift}
+                    <div className="text-sm font-bold text-white truncate pr-2 notranslate">{entry.sku_name}</div>
+                    <div className="flex justify-center">
+                      <div className="text-xs font-bold text-blue-500 bg-blue-500/10 w-fit px-2 py-0.5 rounded notranslate">
+                        {shiftMap[entry.shift] || entry.shift}
+                      </div>
                     </div>
-                    <div className="col-span-3 text-right text-blue-500 font-bold text-base">{entry.quantity}</div>
+                    <div className="text-right text-blue-500 font-bold text-base">{entry.quantity}</div>
+                    <div className="w-8 flex justify-end">
+                      <button 
+                        onClick={() => handleDeleteEntry(entry.id)}
+                        className="text-zinc-600 hover:text-red-500 active:text-red-600 transition-colors p-1"
+                        title="Excluir"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
