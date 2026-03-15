@@ -837,7 +837,7 @@ const ConsultaScreen = ({
                 <div className="col-span-2">TURNO</div>
                 <div className="col-span-3 text-right">QTD.</div>
               </div>
-              <div className="divide-y divide-zinc-800">
+              <div className="divide-y divide-zinc-800 max-h-64 overflow-y-auto no-scrollbar">
                 {displayedEntries.map((entry) => (
                   <div key={entry.id} className="grid grid-cols-12 items-center px-5 py-4 active:bg-zinc-800 transition-colors">
                     <div className="col-span-3 text-xs font-bold text-zinc-400">
