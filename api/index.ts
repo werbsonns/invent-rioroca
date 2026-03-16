@@ -131,6 +131,23 @@ app.post("/api/entries", async (req, res) => {
   }
 });
 
+app.put("/api/entries/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { sku_id, shift, quantity } = req.body;
+    
+    await sql`
+      UPDATE entries 
+      SET sku_id = ${sku_id}, shift = ${shift}, quantity = ${quantity} 
+      WHERE id = ${id}
+    `;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error updating entry:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.get("/api/stats", async (req, res) => {
   try {
     const { rows } = await sql`SELECT SUM(quantity) FROM entries`;

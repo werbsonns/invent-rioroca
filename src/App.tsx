@@ -66,6 +66,7 @@ interface ConsultaScreenProps {
   showAllEntries: boolean;
   setShowAllEntries: (val: boolean) => void;
   setSuccessMessage: (val: boolean) => void;
+  skus: SKU[];
 }
 
 interface SKUManagerScreenProps {
@@ -405,6 +406,7 @@ export default function App() {
           showAllEntries={showAllEntries}
           setShowAllEntries={setShowAllEntries}
           setSuccessMessage={setSuccessMessage}
+          skus={skus}
         />
       );
       case 'skus': return (
@@ -745,8 +747,50 @@ const ConsultaScreen = ({
   fetchData, dateInputRef, filterDate, setFilterDate,
   showShiftModal, setShowShiftModal, filterShift, setFilterShift,
   entries, filteredEntries, shiftMap, showAllEntries, setShowAllEntries,
-  setSuccessMessage
+  setSuccessMessage, skus
 }: ConsultaScreenProps) => {
+  const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
+  const [editSkuId, setEditSkuId] = useState<number | ''>('');
+  const [editShift, setEditShift] = useState('A');
+  const [editQuantity, setEditQuantity] = useState<number | ''>('');
+
+  const handleEditEntryClick = (entry: Entry) => {
+    setEditingEntryId(entry.id);
+    setEditSkuId(entry.sku_id);
+    setEditShift(entry.shift);
+    setEditQuantity(entry.quantity);
+  };
+
+  const handleSaveEditEntry = async () => {
+    if (!editSkuId || editQuantity === '' || editQuantity <= 0) {
+      alert('Por favor, preencha o SKU e uma quantidade válida.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/entries/${editingEntryId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sku_id: editSkuId,
+          shift: editShift,
+          quantity: editQuantity
+        })
+      });
+
+      if (res.ok) {
+        setEditingEntryId(null);
+        setSuccessMessage(true);
+        setTimeout(() => setSuccessMessage(false), 3000);
+        fetchData();
+      } else {
+        alert('Erro ao salvar edição.');
+      }
+    } catch (error) {
+      console.error('Error updating entry:', error);
+      alert('Erro de conexão ao salvar edição.');
+    }
+  };
   const handleDeleteEntry = async (id: number) => {
     if (!window.confirm('Deseja realmente excluir este apontamento?')) return;
 
@@ -857,7 +901,7 @@ const ConsultaScreen = ({
                 <div>SKU</div>
                 <div className="text-center">TURNO</div>
                 <div className="text-right">QTD.</div>
-                <div className="w-8"></div>
+                <div className="w-14"></div>
               </div>
               <div className="divide-y divide-zinc-800 max-h-64 overflow-y-auto no-scrollbar">
                 {displayedEntries.map((entry) => (
@@ -872,7 +916,14 @@ const ConsultaScreen = ({
                       </div>
                     </div>
                     <div className="text-right text-blue-500 font-bold text-base">{entry.quantity}</div>
-                    <div className="w-8 flex justify-end">
+                    <div className="w-14 flex justify-end gap-1">
+                      <button 
+                        onClick={() => handleEditEntryClick(entry)}
+                        className="text-zinc-600 hover:text-blue-500 active:text-blue-600 transition-colors p-1"
+                        title="Editar"
+                      >
+                        <Edit2 size={16} />
+                      </button>
                       <button 
                         onClick={() => handleDeleteEntry(entry.id)}
                         className="text-zinc-600 hover:text-red-500 active:text-red-600 transition-colors p-1"
@@ -986,6 +1037,105 @@ const ConsultaScreen = ({
                     {filterShift === s && <Check size={20} />}
                   </button>
                 ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {editingEntryId !== null && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setEditingEntryId(null)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 bg-zinc-900 rounded-t-3xl z-[60] p-6 pb-12 max-w-md mx-auto border-t border-white/10"
+            >
+              <div className="w-12 h-1.5 bg-zinc-800 rounded-full mx-auto mb-6" />
+              <h3 className="text-xl font-bold text-white mb-6 bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent">
+                Editar Lançamento
+              </h3>
+
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase ml-1">SKU</label>
+                  <div className="relative flex items-center">
+                    <select
+                      className="w-full h-12 bg-zinc-800 border-none rounded-xl px-4 text-white focus:ring-2 focus:ring-blue-500 appearance-none notranslate"
+                      value={editSkuId}
+                      onChange={(e) => setEditSkuId(Number(e.target.value))}
+                    >
+                      <option value="" disabled className="notranslate">Selecione um SKU</option>
+                      {skus.map(sku => (
+                        <option key={sku.id} value={sku.id} className="notranslate">{sku.name}</option>
+                      ))}
+                    </select>
+                    <Barcode size={18} className="absolute right-4 text-zinc-500 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase ml-1">Turno</label>
+                  <div className="grid grid-cols-3 gap-2 p-1 bg-zinc-800 rounded-xl">
+                    {['A', 'B', 'C'].map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setEditShift(t)}
+                        className={`h-10 rounded-lg flex items-center justify-center text-sm font-semibold transition-all notranslate ${editShift === t ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500'}`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase ml-1">Quantidade de Peças</label>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => setEditQuantity(prev => Math.max(0, (typeof prev === 'number' ? prev : 0) - 1))}
+                      className="size-12 rounded-xl bg-zinc-800 text-white flex items-center justify-center active:scale-95 transition-transform"
+                    >
+                      <Minus size={20} strokeWidth={3} />
+                    </button>
+                    <input
+                      className="flex-1 h-12 text-center text-xl font-bold bg-zinc-800 border-none rounded-xl text-white focus:ring-2 focus:ring-blue-500"
+                      type="number"
+                      placeholder="0"
+                      value={editQuantity}
+                      onChange={(e) => setEditQuantity(e.target.value === '' ? '' : Number(e.target.value))}
+                    />
+                    <button
+                      onClick={() => setEditQuantity(prev => (typeof prev === 'number' ? prev : 0) + 1)}
+                      className="size-12 rounded-xl bg-zinc-800 text-white flex items-center justify-center active:scale-95 transition-transform"
+                    >
+                      <Plus size={20} strokeWidth={3} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button
+                    onClick={() => setEditingEntryId(null)}
+                    className="flex-1 h-14 bg-zinc-800 text-white rounded-xl font-bold active:opacity-60"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSaveEditEntry}
+                    className="flex-[2] h-14 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-transform"
+                  >
+                    Salvar Alterações
+                  </button>
+                </div>
               </div>
             </motion.div>
           </>
