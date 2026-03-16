@@ -401,12 +401,18 @@ export default function App() {
         }
       }
     } catch (error: any) {
-      console.error('Error sharing report:', error);
+      console.error('Full sharing error object:', error);
       if (error.name === 'AbortError') return;
       
       const { wb, fileName } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
       XLSX.writeFile(wb, fileName);
-      alert('Ocorreu um problema ao compartilhar. O arquivo foi baixado como alternativa.');
+      
+      // More descriptive error message for debugging
+      let debugMsg = 'Não foi possível compartilhar direto.';
+      if (error.name) debugMsg += `\nErro: ${error.name}`;
+      if (error.message) debugMsg += `\nDetalhe: ${error.message}`;
+      
+      alert(debugMsg + '\n\nO arquivo foi baixado automaticamente para sua segurança.');
     } finally {
       setIsSharing(false);
     }
