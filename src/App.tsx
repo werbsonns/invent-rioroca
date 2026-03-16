@@ -68,6 +68,10 @@ interface ConsultaScreenProps {
   setSuccessMessage: (val: boolean) => void;
   skus: SKU[];
   setSelectedEntryForDetails: (entry: Entry | null) => void;
+  filterSkuId: number | 'Todos';
+  setFilterSkuId: (val: number | 'Todos') => void;
+  showSkuModal: boolean;
+  setShowSkuModal: (val: boolean) => void;
 }
 
 interface SKUManagerScreenProps {
@@ -120,7 +124,9 @@ export default function App() {
   // Filter State
   const [filterDate, setFilterDate] = useState<string | null>(null);
   const [filterShift, setFilterShift] = useState<string>('Todos');
+  const [filterSkuId, setFilterSkuId] = useState<number | 'Todos'>('Todos');
   const [showShiftModal, setShowShiftModal] = useState(false);
+  const [showSkuModal, setShowSkuModal] = useState(false);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const reportStartDateRef = useRef<HTMLInputElement>(null);
   const reportEndDateRef = useRef<HTMLInputElement>(null);
@@ -146,9 +152,10 @@ export default function App() {
   const filteredEntries = React.useMemo(() => {
     return entries.filter(e =>
       (!filterDate || e.date === filterDate) &&
-      (filterShift === 'Todos' || e.shift === filterShift)
+      (filterShift === 'Todos' || e.shift === filterShift) &&
+      (filterSkuId === 'Todos' || e.sku_id === filterSkuId)
     );
-  }, [entries, filterDate, filterShift]);
+  }, [entries, filterDate, filterShift, filterSkuId]);
 
   const totalQuantity = React.useMemo(() => {
     return filteredEntries.reduce((acc, curr) => acc + curr.quantity, 0);
@@ -422,6 +429,10 @@ export default function App() {
           setSuccessMessage={setSuccessMessage}
           skus={skus}
           setSelectedEntryForDetails={setSelectedEntryForDetails}
+          filterSkuId={filterSkuId}
+          setFilterSkuId={setFilterSkuId}
+          showSkuModal={showSkuModal}
+          setShowSkuModal={setShowSkuModal}
         />
       );
       case 'skus': return (
@@ -870,7 +881,8 @@ const ConsultaScreen = ({
   fetchData, dateInputRef, filterDate, setFilterDate,
   showShiftModal, setShowShiftModal, filterShift, setFilterShift,
   entries, filteredEntries, shiftMap, showAllEntries, setShowAllEntries,
-  setSuccessMessage, skus, setSelectedEntryForDetails
+  setSuccessMessage, skus, setSelectedEntryForDetails,
+  filterSkuId, setFilterSkuId, showSkuModal, setShowSkuModal
 }: ConsultaScreenProps) => {
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
   const [editSkuId, setEditSkuId] = useState<number | ''>('');
@@ -977,13 +989,23 @@ const ConsultaScreen = ({
             <p className="text-sm font-semibold">{filterShift === 'Todos' ? 'Turno' : `Turno ${filterShift}`}</p>
           </button>
           <button
+            onClick={() => setShowSkuModal(true)}
+            className={`flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full border px-4 active:scale-95 transition-transform ${filterSkuId !== 'Todos' ? 'border-blue-500/30 bg-blue-500/15 text-blue-500 shadow-lg shadow-blue-500/10' : 'bg-zinc-900 border-zinc-800 text-zinc-400'}`}
+          >
+            <Barcode size={16} />
+            <p className="text-sm font-semibold truncate max-w-[100px]">
+              {filterSkuId === 'Todos' ? 'SKU' : skus.find(s => s.id === filterSkuId)?.name || 'SKU'}
+            </p>
+          </button>
+          <button
             onClick={() => {
               setFilterDate(null);
               setFilterShift('Todos');
+              setFilterSkuId('Todos');
             }}
             className="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-zinc-900 border border-zinc-800 px-4 text-zinc-400 active:scale-95 transition-transform"
           >
-            <Filter size={16} className={filterDate || filterShift !== 'Todos' ? 'text-blue-500' : ''} />
+            <Filter size={16} className={filterDate || filterShift !== 'Todos' || filterSkuId !== 'Todos' ? 'text-blue-500' : ''} />
             <p className="text-sm font-medium">Limpar</p>
           </button>
         </div>
@@ -1181,6 +1203,59 @@ const ConsultaScreen = ({
           </>
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {showSkuModal && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSkuModal(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 bg-zinc-900 rounded-t-3xl z-50 p-6 pb-12 max-w-md mx-auto border-t border-white/10"
+            >
+              <div className="w-12 h-1.5 bg-zinc-800 rounded-full mx-auto mb-6" />
+              <h3 className="text-lg font-bold text-white mb-4 notranslate">Filtrar SKU</h3>
+              <div className="space-y-2 max-h-80 overflow-y-auto no-scrollbar pr-1">
+                <button
+                  onClick={() => {
+                    setFilterSkuId('Todos');
+                    setShowSkuModal(false);
+                  }}
+                  className={`w-full h-14 shrink-0 rounded-xl flex items-center justify-between px-5 transition-all ${filterSkuId === 'Todos' ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}
+                >
+                  <span className="font-semibold notranslate">Todos os SKUs</span>
+                  {filterSkuId === 'Todos' && <Check size={20} />}
+                </button>
+                {skus.map((sku) => (
+                  <button
+                    key={sku.id}
+                    onClick={() => {
+                      setFilterSkuId(sku.id);
+                      setShowSkuModal(false);
+                    }}
+                    className={`w-full h-14 shrink-0 rounded-xl flex items-center justify-between px-5 transition-all notranslate ${filterSkuId === sku.id ? 'bg-blue-600 text-white' : 'bg-zinc-900/50 border border-white/5 text-zinc-400 hover:text-white'}`}
+                  >
+                    <div className="flex flex-col items-start overflow-hidden text-left">
+                      <span className="font-semibold truncate w-full notranslate">{sku.name}</span>
+                      <span className="text-[10px] uppercase font-bold opacity-50 notranslate">{sku.fase}</span>
+                    </div>
+                    {filterSkuId === sku.id && <Check size={20} className="shrink-0 ml-2" />}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {editingEntryId !== null && (
           <>
