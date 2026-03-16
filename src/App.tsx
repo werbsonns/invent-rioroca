@@ -32,7 +32,8 @@ import {
   Cloud,
   MessageCircle,
   Download,
-  Smartphone
+  Smartphone,
+  Mail
 } from 'lucide-react';
 import { SKU, Entry, Tab } from './types';
 
