@@ -98,6 +98,8 @@ interface ReportsScreenProps {
   shiftMap: Record<string, string>;
   handleExportExcel: () => void;
   handleSendEmail: () => void;
+  reportShift: string;
+  setReportShift: (val: string) => void;
 }
 
 export default function App() {
@@ -126,6 +128,7 @@ export default function App() {
   // Reports State
   const [reportStartDate, setReportStartDate] = useState<string>(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [reportEndDate, setReportEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [reportShift, setReportShift] = useState<string>('Todos');
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailForReport, setEmailForReport] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -299,7 +302,11 @@ export default function App() {
   };
 
   const handleExportExcel = () => {
-    const filteredEntries = entries.filter(e => e.date >= reportStartDate && e.date <= reportEndDate);
+    const filteredEntries = entries.filter(e => 
+      e.date >= reportStartDate && 
+      e.date <= reportEndDate && 
+      (reportShift === 'Todos' || e.shift === reportShift)
+    );
 
     if (filteredEntries.length === 0) {
       alert('Nenhum dado encontrado para o período selecionado.');
@@ -341,7 +348,11 @@ export default function App() {
     // Simulate sending delay
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    const filteredEntries = entries.filter(e => e.date >= reportStartDate && e.date <= reportEndDate);
+    const filteredEntries = entries.filter(e => 
+      e.date >= reportStartDate && 
+      e.date <= reportEndDate && 
+      (reportShift === 'Todos' || e.shift === reportShift)
+    );
 
     if (filteredEntries.length === 0) {
       alert('Nenhum dado encontrado para o período selecionado.');
@@ -443,6 +454,8 @@ export default function App() {
           shiftMap={shiftMap}
           handleExportExcel={handleExportExcel}
           handleSendEmail={handleSendEmail}
+          reportShift={reportShift}
+          setReportShift={setReportShift}
         />
       );
       default: return (
@@ -1462,7 +1475,7 @@ const SKUManagerScreen = ({
 const ReportsScreen = ({
   setActiveTab, reportStartDateRef, reportStartDate, setReportStartDate,
   reportEndDateRef, reportEndDate, setReportEndDate, entries, shiftMap,
-  handleExportExcel, handleSendEmail
+  handleExportExcel, handleSendEmail, reportShift, setReportShift
 }: ReportsScreenProps) => (
   <div className="flex flex-col h-full overflow-hidden">
     <header className="flex items-center bg-black/80 backdrop-blur-md px-4 py-12 border-b border-white/10 sticky top-0 z-20">
@@ -1524,8 +1537,12 @@ const ReportsScreen = ({
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] text-zinc-500 font-semibold uppercase ml-1">Turno</label>
             <div className="relative">
-              <select className="w-full appearance-none bg-zinc-800 p-3.5 rounded-xl border border-white/5 text-[15px] font-medium text-white focus:ring-1 focus:ring-blue-500/50 outline-none notranslate">
-                <option value="todos">Todos</option>
+              <select 
+                value={reportShift}
+                onChange={(e) => setReportShift(e.target.value)}
+                className="w-full appearance-none bg-zinc-800 p-3.5 rounded-xl border border-white/5 text-[15px] font-medium text-white focus:ring-1 focus:ring-blue-500/50 outline-none notranslate"
+              >
+                <option value="Todos">Todos</option>
                 <option value="A">A</option>
                 <option value="B">B</option>
                 <option value="C">C</option>
@@ -1582,7 +1599,7 @@ const ReportsScreen = ({
               <span className="uppercase text-[9px] opacity-70">Total Peças</span>
               <span className="text-white text-sm">
                 {entries
-                  .filter(e => e.date >= reportStartDate && e.date <= reportEndDate)
+                  .filter(e => e.date >= reportStartDate && e.date <= reportEndDate && (reportShift === 'Todos' || e.shift === reportShift))
                   .reduce((acc, curr) => acc + curr.quantity, 0)
                   .toLocaleString()}
               </span>
@@ -1591,7 +1608,7 @@ const ReportsScreen = ({
             <div className="flex flex-col items-center gap-1">
               <span className="uppercase text-[9px] opacity-70">Registros</span>
               <span className="text-white text-sm">
-                {entries.filter(e => e.date >= reportStartDate && e.date <= reportEndDate).length}
+                {entries.filter(e => e.date >= reportStartDate && e.date <= reportEndDate && (reportShift === 'Todos' || e.shift === reportShift)).length}
               </span>
             </div>
           </div>
