@@ -372,53 +372,62 @@ export default function App() {
 
     if (filteredEntries.length === 0) return;
 
-    // 1. Generate core file data IMMEDIATELY and SYNCHRONOUSLY
+    // Synchronous generation for better gesture preservation
     const { wb, fileName } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
     const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    const file = new File([new Blob([wbout], { type: mimeType })], fileName, { type: mimeType });
+    const file = new File([wbout], fileName, { type: mimeType });
 
-    // 2. Immediate direct share if possible (Must be before any state updates!)
-    if (method !== 'download' && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    if (method === 'download') {
+      setShowShareModal(false);
+      XLSX.writeFile(wb, fileName);
+      return;
+    }
+
+    // Try Direct Share (Primary Path for Mobile)
+    if (navigator.share) {
       try {
-        await navigator.share({
-          files: [file],
-          title: 'Relatório de Produção',
-          // Removed text to maximize app compatibility
-        });
-        // Success! Finalize UI
-        setShowShareModal(false);
-        return;
+        // We try to share even if canShare is unsure, as some implementations are buggy
+        const canShareFiles = navigator.canShare && navigator.canShare({ files: [file] });
+        
+        if (canShareFiles || !navigator.canShare) {
+          await navigator.share({
+            files: [file],
+            title: 'Relatório'
+          });
+          setShowShareModal(false);
+          return;
+        }
       } catch (error: any) {
-        console.error('Direct Share Error:', error);
+        console.error('Direct Share Attempt Failed:', error);
         if (error.name === 'AbortError') {
           setShowShareModal(false);
           return;
         }
-        // If NotAllowedError (Permission), we fall through to the robust fallback
       }
     }
 
-    // 3. Fallback / Download Logic
+    // Fallback Path (Desktop/Unsupported Mobile)
     setShowShareModal(false);
     setIsSharing(true);
     
     try {
+      // Essential: Download first because we can't "send" files via URL (WhatsApp/Email)
       XLSX.writeFile(wb, fileName);
 
       if (method === 'whatsapp') {
-        const text = encodeURIComponent(`Segue o Relatório de Produção (${reportStartDate} até ${reportEndDate}). O arquivo excel já foi baixado.`);
+        const text = encodeURIComponent(`Olá, estou enviando o Relatório de Produção (${reportStartDate} a ${reportEndDate}). O arquivo excel acabou de ser baixado no seu dispositivo, basta anexá-lo aqui agora! ✅`);
         window.open(`https://wa.me/?text=${text}`, '_blank');
       } else if (method === 'email') {
         const subject = encodeURIComponent('Relatório de Produção');
-        const body = encodeURIComponent(`Olá, segue em anexo o relatório (${reportStartDate} a ${reportEndDate}). O arquivo foi baixado.`);
+        const body = encodeURIComponent(`Olá, segue o relatório de produção (${reportStartDate} a ${reportEndDate}). O arquivo foi baixado no seu dispositivo para você anexar.`);
         window.location.href = `mailto:?subject=${subject}&body=${body}`;
-      } else if (method !== 'download') {
-        alert('Este dispositivo não permite compartilhar arquivos diretamente. O relatório foi baixado com sucesso! ✅');
+      } else {
+        alert('Este dispositivo não suporta o envio direto de arquivos pelo navegador. O relatório foi baixado com sucesso nos seus arquivos! ✅');
       }
     } catch (e) {
       console.error('Final Fallback Error:', e);
-      alert('Ocorreu um problema ao gerar o arquivo. Por favor, tente novamente.');
+      alert('Erro ao gerar relatório. Tente novamente.');
     } finally {
       setIsSharing(false);
     }
