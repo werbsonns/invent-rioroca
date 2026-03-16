@@ -372,7 +372,7 @@ export default function App() {
 
     if (filteredEntries.length === 0) return;
 
-    // Synchronous generation for better gesture preservation
+    // 1. Generate core file synchronously
     const { wb, fileName } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
     const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -384,47 +384,54 @@ export default function App() {
       return;
     }
 
-    // Try Direct Share (Primary for Mobile)
+    // 2. Direct Share (Primary Path)
     if (navigator.share) {
       try {
-        // Try to share ONLY the file to maximize compatibility
+        // REQUIRED: Files share often fails on mobile if not HTTPS
+        if (!window.isSecureContext && window.location.hostname !== 'localhost') {
+          throw new Error('SECURITY_LIMITATION');
+        }
+
         await navigator.share({
-          files: [file]
+          files: [file],
+          title: 'Relatório de Produção'
         });
+        
         setShowShareModal(false);
         return;
       } catch (error: any) {
-        console.error('Direct Share Failed:', error);
+        console.error('Share Error:', error);
         if (error.name === 'AbortError') {
           setShowShareModal(false);
           return;
         }
-        // If it failed because files aren't supported, we fall through to the fallback
+        
+        if (error.message === 'SECURITY_LIMITATION' || error.name === 'NotAllowedError') {
+          setShowShareModal(false);
+          XLSX.writeFile(wb, fileName);
+          alert('⚠️ Bloqueio de Segurança:\nPara enviar o arquivo DIRETAMENTE no WhatsApp, o site precisa ser seguro (HTTPS).\n\nComo este site não é HTTPS, o arquivo foi BAIXADO. Agora você só precisa anexá-lo no WhatsApp manualmente!');
+          
+          if (method === 'whatsapp') {
+            const text = encodeURIComponent('Olá, estou enviando o Relatório de Produção. O arquivo excel acabou de ser baixado no seu dispositivo.');
+            window.open(`https://wa.me/?text=${text}`, '_blank');
+          }
+          return;
+        }
       }
     }
 
-    // Fallback Logic (Desktop or Unsupported Mobile)
+    // 3. General Fallback
     setShowShareModal(false);
-    setIsSharing(true);
+    XLSX.writeFile(wb, fileName);
     
-    try {
-      XLSX.writeFile(wb, fileName);
-
-      if (method === 'whatsapp') {
-        const text = encodeURIComponent(`Segue o Relatório (${reportStartDate} a ${reportEndDate}). O arquivo excel foi baixado, basta anexá-lo agora!`);
-        window.open(`https://wa.me/?text=${text}`, '_blank');
-      } else if (method === 'email') {
-        const subject = encodeURIComponent('Relatório de Produção');
-        const body = encodeURIComponent(`Olá, segue o relatório (${reportStartDate} a ${reportEndDate}). O arquivo foi baixado para anexar.`);
-        window.location.href = `mailto:?subject=${subject}&body=${body}`;
-      } else {
-        alert('Este dispositivo não permite enviar arquivos diretamente pelo navegador. O relatório foi baixado com sucesso! ✅');
-      }
-    } catch (e) {
-      console.error('Fallback Error:', e);
-      alert('Erro ao gerar relatório.');
-    } finally {
-      setIsSharing(false);
+    if (method === 'whatsapp') {
+      const text = encodeURIComponent(`Segue o Relatório. O arquivo excel foi BAIXADO, basta anexá-lo agora! ✅`);
+      window.open(`https://wa.me/?text=${text}`, '_blank');
+    } else if (method === 'email') {
+      const subject = encodeURIComponent('Relatório de Produção');
+      window.location.href = `mailto:?subject=${subject}&body=O arquivo foi baixado no seu dispositivo.`;
+    } else {
+      alert('Seu dispositivo não permite enviar o arquivo direto. Ele foi salvo nos seus Downloads! ✅');
     }
   };
 
