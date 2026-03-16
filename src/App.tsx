@@ -393,8 +393,8 @@ export default function App() {
         }
 
         await navigator.share({
-          files: [file],
-          title: 'Relatório de Produção'
+          files: [file]
+          // title removed to minimize payload for some apps
         });
         
         setShowShareModal(false);
@@ -409,7 +409,7 @@ export default function App() {
         if (error.message === 'SECURITY_LIMITATION' || error.name === 'NotAllowedError') {
           setShowShareModal(false);
           XLSX.writeFile(wb, fileName);
-          alert('⚠️ Bloqueio de Segurança:\nPara enviar o arquivo DIRETAMENTE no WhatsApp, o site precisa ser seguro (HTTPS).\n\nComo este site não é HTTPS, o arquivo foi BAIXADO. Agora você só precisa anexá-lo no WhatsApp manualmente!');
+          alert('🚫 O seu navegador não permite anexar arquivos SEM HTTPS.\n\nO arquivo foi BAIXADO. Você precisa clicar no ícone de "clipe" ou "mais" no WhatsApp e escolher este arquivo que acabou de baixar.');
           
           if (method === 'whatsapp') {
             const text = encodeURIComponent('Olá, estou enviando o Relatório de Produção. O arquivo excel acabou de ser baixado no seu dispositivo.');
