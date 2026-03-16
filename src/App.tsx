@@ -381,14 +381,39 @@ export default function App() {
     XLSX.utils.book_append_sheet(wb, ws, 'Produção');
 
     const fileName = `Producao_${reportStartDate}_ate_${reportEndDate}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    
+    // Generate base64 content
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
 
-    setIsSendingEmail(false);
-    setShowEmailModal(false);
-    setEmailForReport('');
+    try {
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: emailForReport,
+          subject: `Relatório de Produção (${reportStartDate} a ${reportEndDate})`,
+          body: `Olá,\n\nSegue em anexo o relatório de produção referente ao período de ${reportStartDate} até ${reportEndDate}.\n\nFiltro de Turno: ${reportShift}.\n\nAtenciosamente,\nInventoryPro`,
+          attachment: wbout,
+          fileName: fileName
+        })
+      });
 
-    setSuccessMessage(true);
-    setTimeout(() => setSuccessMessage(false), 3000);
+      if (response.ok) {
+        setIsSendingEmail(false);
+        setShowEmailModal(false);
+        setEmailForReport('');
+        setSuccessMessage(true);
+        setTimeout(() => setSuccessMessage(false), 3000);
+      } else {
+        const errData = await response.json();
+        alert('Erro ao enviar e-mail: ' + (errData.error || 'Erro desconhecido'));
+        setIsSendingEmail(false);
+      }
+    } catch (error) {
+      console.error('Error sending email:', error);
+      alert('Erro de conexão ao enviar e-mail.');
+      setIsSendingEmail(false);
+    }
   };
 
   const renderTab = () => {
