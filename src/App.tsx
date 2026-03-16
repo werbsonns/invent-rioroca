@@ -384,50 +384,45 @@ export default function App() {
       return;
     }
 
-    // Try Direct Share (Primary Path for Mobile)
+    // Try Direct Share (Primary for Mobile)
     if (navigator.share) {
       try {
-        // We try to share even if canShare is unsure, as some implementations are buggy
-        const canShareFiles = navigator.canShare && navigator.canShare({ files: [file] });
-        
-        if (canShareFiles || !navigator.canShare) {
-          await navigator.share({
-            files: [file],
-            title: 'Relatório'
-          });
-          setShowShareModal(false);
-          return;
-        }
+        // Try to share ONLY the file to maximize compatibility
+        await navigator.share({
+          files: [file]
+        });
+        setShowShareModal(false);
+        return;
       } catch (error: any) {
-        console.error('Direct Share Attempt Failed:', error);
+        console.error('Direct Share Failed:', error);
         if (error.name === 'AbortError') {
           setShowShareModal(false);
           return;
         }
+        // If it failed because files aren't supported, we fall through to the fallback
       }
     }
 
-    // Fallback Path (Desktop/Unsupported Mobile)
+    // Fallback Logic (Desktop or Unsupported Mobile)
     setShowShareModal(false);
     setIsSharing(true);
     
     try {
-      // Essential: Download first because we can't "send" files via URL (WhatsApp/Email)
       XLSX.writeFile(wb, fileName);
 
       if (method === 'whatsapp') {
-        const text = encodeURIComponent(`Olá, estou enviando o Relatório de Produção (${reportStartDate} a ${reportEndDate}). O arquivo excel acabou de ser baixado no seu dispositivo, basta anexá-lo aqui agora! ✅`);
+        const text = encodeURIComponent(`Segue o Relatório (${reportStartDate} a ${reportEndDate}). O arquivo excel foi baixado, basta anexá-lo agora!`);
         window.open(`https://wa.me/?text=${text}`, '_blank');
       } else if (method === 'email') {
         const subject = encodeURIComponent('Relatório de Produção');
-        const body = encodeURIComponent(`Olá, segue o relatório de produção (${reportStartDate} a ${reportEndDate}). O arquivo foi baixado no seu dispositivo para você anexar.`);
+        const body = encodeURIComponent(`Olá, segue o relatório (${reportStartDate} a ${reportEndDate}). O arquivo foi baixado para anexar.`);
         window.location.href = `mailto:?subject=${subject}&body=${body}`;
       } else {
-        alert('Este dispositivo não suporta o envio direto de arquivos pelo navegador. O relatório foi baixado com sucesso nos seus arquivos! ✅');
+        alert('Este dispositivo não permite enviar arquivos diretamente pelo navegador. O relatório foi baixado com sucesso! ✅');
       }
     } catch (e) {
-      console.error('Final Fallback Error:', e);
-      alert('Erro ao gerar relatório. Tente novamente.');
+      console.error('Fallback Error:', e);
+      alert('Erro ao gerar relatório.');
     } finally {
       setIsSharing(false);
     }
