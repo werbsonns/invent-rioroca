@@ -372,65 +372,53 @@ export default function App() {
 
     if (filteredEntries.length === 0) return;
 
-    // Generate everything BEFORE state changes to keep user activation "fresh"
+    // 1. Generate core file data IMMEDIATELY and SYNCHRONOUSLY
     const { wb, fileName } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
     const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     const file = new File([new Blob([wbout], { type: mimeType })], fileName, { type: mimeType });
 
-    if (method === 'download') {
-      setShowShareModal(false);
-      XLSX.writeFile(wb, fileName);
-      return;
-    }
-
-    try {
-      // Check for navigator.share BEFORE any awaits or state changes
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        setShowShareModal(false);
-        setIsSharing(true);
-
+    // 2. Immediate direct share if possible (Must be before any state updates!)
+    if (method !== 'download' && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
         await navigator.share({
           files: [file],
           title: 'Relatório de Produção',
-          text: `Relatório de Produção (${reportStartDate} a ${reportEndDate})`
+          // Removed text to maximize app compatibility
         });
-      } else {
-        // Advanced Fallback for non-supporting browsers (like Desktop Chrome/Windows)
+        // Success! Finalize UI
         setShowShareModal(false);
-        XLSX.writeFile(wb, fileName);
-
-        if (method === 'whatsapp') {
-          const text = encodeURIComponent(`Segue o Relatório de Produção (${reportStartDate} até ${reportEndDate}). O arquivo excel já foi baixado no seu dispositivo.`);
-          window.open(`https://wa.me/?text=${text}`, '_blank');
-        } else if (method === 'email') {
-          const subject = encodeURIComponent('Relatório de Produção');
-          const body = encodeURIComponent(`Olá, segue em anexo o relatório de produção do período ${reportStartDate} até ${reportEndDate}.\n\n(O arquivo foi baixado automaticamente na sua pasta de Downloads)`);
-          window.location.href = `mailto:?subject=${subject}&body=${body}`;
-        } else {
-          alert('Este dispositivo não permite compartilhar arquivos diretamente. O relatório foi baixado com sucesso! 😊');
+        return;
+      } catch (error: any) {
+        console.error('Direct Share Error:', error);
+        if (error.name === 'AbortError') {
+          setShowShareModal(false);
+          return;
         }
+        // If NotAllowedError (Permission), we fall through to the robust fallback
       }
-    } catch (error: any) {
-      console.error('Sharing Error:', error);
-      setShowShareModal(false);
-      
-      if (error.name === 'AbortError') return;
+    }
 
-      // Handle Permission Denied (NotAllowedError) or other blocks
-      const { wb: wbError, fileName: fnError } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
-      XLSX.writeFile(wbError, fnError);
+    // 3. Fallback / Download Logic
+    setShowShareModal(false);
+    setIsSharing(true);
+    
+    try {
+      XLSX.writeFile(wb, fileName);
 
       if (method === 'whatsapp') {
-        const text = encodeURIComponent(`Relatório de Produção (${reportStartDate} até ${reportEndDate}). O arquivo excel já está nos seus downloads.`);
+        const text = encodeURIComponent(`Segue o Relatório de Produção (${reportStartDate} até ${reportEndDate}). O arquivo excel já foi baixado.`);
         window.open(`https://wa.me/?text=${text}`, '_blank');
       } else if (method === 'email') {
         const subject = encodeURIComponent('Relatório de Produção');
-        const body = encodeURIComponent(`Olá, segue o relatório de produção (${reportStartDate} a ${reportEndDate}). O arquivo excel já está nos seus downloads.`);
+        const body = encodeURIComponent(`Olá, segue em anexo o relatório (${reportStartDate} a ${reportEndDate}). O arquivo foi baixado.`);
         window.location.href = `mailto:?subject=${subject}&body=${body}`;
-      } else {
-        alert('O navegador bloqueou o compartilhamento direto por segurança. O relatório foi baixado e você pode enviá-lo manualmente! ✅');
+      } else if (method !== 'download') {
+        alert('Este dispositivo não permite compartilhar arquivos diretamente. O relatório foi baixado com sucesso! ✅');
       }
+    } catch (e) {
+      console.error('Final Fallback Error:', e);
+      alert('Ocorreu um problema ao gerar o arquivo. Por favor, tente novamente.');
     } finally {
       setIsSharing(false);
     }
