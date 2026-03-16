@@ -318,6 +318,14 @@ export default function App() {
       return;
     }
 
+    const { wb, fileName } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
+    XLSX.writeFile(wb, fileName);
+
+    setSuccessMessage(true);
+    setTimeout(() => setSuccessMessage(false), 3000);
+  };
+
+  const generateReportExcel = (filteredEntries: Entry[], startDate: string, endDate: string) => {
     const dataToExport = filteredEntries.map(e => ({
       'Data': new Date(e.date + 'T12:00:00').toLocaleDateString('pt-BR'),
       'SKU': e.sku_name,
@@ -331,17 +339,15 @@ export default function App() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Produção');
 
-    const fileName = `Producao_${reportStartDate}_ate_${reportEndDate}.xlsx`;
-    XLSX.writeFile(wb, fileName);
-
-    setSuccessMessage(true);
-    setTimeout(() => setSuccessMessage(false), 3000);
+    const fileName = `Producao_${startDate}_ate_${endDate}.xlsx`;
+    return { wb, fileName };
   };
 
   const handleShareReport = async () => {
     // Check for Secure Context (HTTPS) - Web Share API requirement
-    if (!window.isSecureContext) {
-      alert('O compartilhamento de arquivos exige uma conexão segura (HTTPS). Por favor, use a opção "Baixar Excel" ou mude para HTTPS.');
+    if (!window.isSecureContext && window.location.hostname !== 'localhost') {
+      alert('O compartilhamento exige uma conexão segura (HTTPS). O relatório será baixado agora.');
+      handleExportExcel();
       return;
     }
 
@@ -359,31 +365,18 @@ export default function App() {
     setIsSharing(true);
 
     try {
-      const dataToExport = filteredEntries.map(e => ({
-        'Data': new Date(e.date + 'T12:00:00').toLocaleDateString('pt-BR'),
-        'SKU': e.sku_name,
-        'Fase': e.fase || '-',
-        'Turno': shiftMap[e.shift] || e.shift,
-        'Carro': e.car_number,
-        'Quantidade': e.quantity
-      }));
-
-      const ws = XLSX.utils.json_to_sheet(dataToExport);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Produção');
-
-      const fileName = `Producao_${reportStartDate}_ate_${reportEndDate}.xlsx`;
+      const { wb, fileName } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
       
       // Generate Excel as arraybuffer
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      // Use standard Excel MIME type
       const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      const blob = new Blob([wbout], { type: mimeType });
-      const file = new File([blob], fileName, { type: mimeType });
+      const file = new File([new Blob([wbout], { type: mimeType })], fileName, { type: mimeType });
 
       // Check if navigator.share is available
       if (!navigator.share) {
-        throw new Error('Navegador não suporta a função de compartilhar.');
+        XLSX.writeFile(wb, fileName);
+        alert('Seu navegador não suporta compartilhamento. O arquivo foi baixado.');
+        return;
       }
 
       // Check if file sharing is supported
@@ -391,12 +384,11 @@ export default function App() {
         await navigator.share({
           files: [file],
           title: 'Relatório de Produção',
-          text: `Relatório de Produção (${reportStartDate} a ${reportEndDate})`
+          text: `Período: ${reportStartDate} até ${reportEndDate}`
         });
       } else {
-        // Fallback to download if file sharing is specifically not supported
         XLSX.writeFile(wb, fileName);
-        alert('Este navegador suporta compartilhar apenas texto, não arquivos. O relatório foi baixado automaticamente.');
+        alert('Este navegador permite compartilhar apenas texto. O arquivo foi baixado.');
       }
     } catch (error: any) {
       console.error('Error sharing report:', error);
@@ -404,29 +396,16 @@ export default function App() {
       // Don't alert if user just cancelled
       if (error.name === 'AbortError') return;
 
-      // Provide more detailed feedback
-      let errorMsg = 'Não foi possível compartilhar o relatório.';
-      if (error.message) errorMsg += `\nDetalhe: ${error.message}`;
+      // Handle common permission/security errors silently by just downloading
+      const isPermissionError = error.name === 'NotAllowedError' || error.message?.toLowerCase().includes('permission');
       
-      alert(errorMsg);
+      const { wb, fileName } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
+      XLSX.writeFile(wb, fileName);
       
-      // Optional: Auto-download as last resort fallback
-      const filteredEntries = entries.filter(e => 
-        e.date >= reportStartDate && e.date <= reportEndDate && (reportShift === 'Todos' || e.shift === reportShift)
-      );
-      if (filteredEntries.length > 0) {
-        const ws = XLSX.utils.json_to_sheet(filteredEntries.map(e => ({
-          'Data': new Date(e.date + 'T12:00:00').toLocaleDateString('pt-BR'),
-          'SKU': e.sku_name,
-          'Fase': e.fase || '-',
-          'Turno': shiftMap[e.shift] || e.shift,
-          'Carro': e.car_number,
-          'Quantidade': e.quantity
-        })));
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Produção');
-        const fileName = `Producao_${reportStartDate}_ate_${reportEndDate}.xlsx`;
-        XLSX.writeFile(wb, fileName);
+      if (isPermissionError) {
+        alert('O navegador bloqueou o compartilhamento direto por segurança. O arquivo foi baixado automaticamente.');
+      } else {
+        alert('Erro ao compartilhar. O arquivo foi baixado como alternativa.');
       }
     } finally {
       setIsSharing(false);
