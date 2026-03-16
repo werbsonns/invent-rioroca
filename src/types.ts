@@ -12,6 +12,7 @@ export interface Entry {
   shift: string;
   car_number: string;
   quantity: number;
+  fase?: string;
   timestamp: string;
 }
 

@@ -29,7 +29,10 @@ import {
   Table as TableIcon,
   Search,
   Filter,
-  Cloud
+  Cloud,
+  MessageCircle,
+  Download,
+  Smartphone
 } from 'lucide-react';
 import { SKU, Entry, Tab } from './types';
 
@@ -136,6 +139,7 @@ export default function App() {
   const [reportEndDate, setReportEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [reportShift, setReportShift] = useState<string>('Todos');
   const [isSharing, setIsSharing] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // SKU Management State
   const [skuSearch, setSkuSearch] = useState('');
@@ -344,13 +348,6 @@ export default function App() {
   };
 
   const handleShareReport = async () => {
-    // Check for Secure Context (HTTPS) - Web Share API requirement
-    if (!window.isSecureContext && window.location.hostname !== 'localhost') {
-      alert('O compartilhamento exige uma conexão segura (HTTPS). O relatório será baixado agora.');
-      handleExportExcel();
-      return;
-    }
-
     const filteredEntries = entries.filter(e => 
       e.date >= reportStartDate && 
       e.date <= reportEndDate && 
@@ -362,51 +359,53 @@ export default function App() {
       return;
     }
 
+    setShowShareModal(true);
+  };
+
+  const confirmShare = async (method: 'whatsapp' | 'email' | 'system' | 'download') => {
+    const filteredEntries = entries.filter(e => 
+      e.date >= reportStartDate && 
+      e.date <= reportEndDate && 
+      (reportShift === 'Todos' || e.shift === reportShift)
+    );
+
+    if (filteredEntries.length === 0) return;
+
     setIsSharing(true);
+    setShowShareModal(false);
 
     try {
       const { wb, fileName } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
-      
-      // Generate Excel as arraybuffer
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       const file = new File([new Blob([wbout], { type: mimeType })], fileName, { type: mimeType });
 
-      // Check if navigator.share is available
-      if (!navigator.share) {
+      if (method === 'download') {
         XLSX.writeFile(wb, fileName);
-        alert('Seu navegador não suporta compartilhamento. O arquivo foi baixado.');
         return;
       }
 
-      // Check if file sharing is supported
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'Relatório de Produção',
-          text: `Período: ${reportStartDate} até ${reportEndDate}`
-        });
-      } else {
-        XLSX.writeFile(wb, fileName);
-        alert('Este navegador permite compartilhar apenas texto. O arquivo foi baixado.');
+      if (method === 'system' || method === 'whatsapp' || method === 'email') {
+        // WhatsApp and Email via Web Share API if supported
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: 'Relatório de Produção',
+            text: `Relatório de Produção (${reportStartDate} a ${reportEndDate})`
+          });
+        } else {
+          // Fallback if system share not available for files
+          XLSX.writeFile(wb, fileName);
+          alert('Seu navegador não suporta compartilhamento de arquivos. O relatório foi baixado automaticamente.');
+        }
       }
     } catch (error: any) {
       console.error('Error sharing report:', error);
-      
-      // Don't alert if user just cancelled
       if (error.name === 'AbortError') return;
-
-      // Handle common permission/security errors silently by just downloading
-      const isPermissionError = error.name === 'NotAllowedError' || error.message?.toLowerCase().includes('permission');
       
       const { wb, fileName } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
       XLSX.writeFile(wb, fileName);
-      
-      if (isPermissionError) {
-        alert('O navegador bloqueou o compartilhamento direto por segurança. O arquivo foi baixado automaticamente.');
-      } else {
-        alert('Erro ao compartilhar. O arquivo foi baixado como alternativa.');
-      }
+      alert('Ocorreu um problema ao compartilhar. O arquivo foi baixado como alternativa.');
     } finally {
       setIsSharing(false);
     }
@@ -562,6 +561,11 @@ export default function App() {
       </nav>
 
       <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-32 h-1.5 bg-zinc-800 rounded-full"></div>
+      <ShareModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        onShare={confirmShare}
+      />
 
       <AnimatePresence>
         {selectedEntryForDetails && (
@@ -1661,4 +1665,90 @@ const ReportsScreen = ({
       </button>
     </footer>
   </div>
+);
+
+const ShareModal = ({
+  isOpen, onClose, onShare
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onShare: (method: 'whatsapp' | 'email' | 'system' | 'download') => void;
+}) => (
+  <AnimatePresence>
+    {isOpen && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: 20 }}
+          className="relative w-full max-w-sm bg-zinc-900 border border-white/10 rounded-3xl p-6 shadow-2xl overflow-hidden"
+        >
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-blue-400 to-blue-600"></div>
+
+          <div className="flex justify-between items-start mb-6">
+            <div className="size-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+              <Share2 size={24} />
+            </div>
+            <button onClick={onClose} className="p-2 -mr-2 text-zinc-500 hover:text-white transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+
+          <h2 className="text-xl font-bold text-white mb-2">Compartilhar Relatório</h2>
+          <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+            Escolha como deseja enviar o arquivo Excel do relatório de produção.
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => onShare('whatsapp')}
+              className="flex flex-col items-center justify-center gap-3 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-white/5 rounded-2xl transition-all active:scale-95 group"
+            >
+              <div className="size-10 rounded-xl bg-green-500/20 flex items-center justify-center text-green-500 group-hover:scale-110 transition-transform">
+                <MessageCircle size={22} />
+              </div>
+              <span className="text-xs font-bold text-white uppercase tracking-tight">WhatsApp</span>
+            </button>
+
+            <button
+              onClick={() => onShare('email')}
+              className="flex flex-col items-center justify-center gap-3 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-white/5 rounded-2xl transition-all active:scale-95 group"
+            >
+              <div className="size-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
+                <Mail size={22} />
+              </div>
+              <span className="text-xs font-bold text-white uppercase tracking-tight">E-mail</span>
+            </button>
+
+            <button
+              onClick={() => onShare('system')}
+              className="flex flex-col items-center justify-center gap-3 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-white/5 rounded-2xl transition-all active:scale-95 group"
+            >
+              <div className="size-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-500 group-hover:scale-110 transition-transform">
+                <Smartphone size={22} />
+              </div>
+              <span className="text-xs font-bold text-white uppercase tracking-tight">Bluetooth / Mais</span>
+            </button>
+
+            <button
+              onClick={() => onShare('download')}
+              className="flex flex-col items-center justify-center gap-3 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-white/5 rounded-2xl transition-all active:scale-95 group"
+            >
+              <div className="size-10 rounded-xl bg-zinc-500/20 flex items-center justify-center text-zinc-400 group-hover:scale-110 transition-transform">
+                <Download size={22} />
+              </div>
+              <span className="text-xs font-bold text-white uppercase tracking-tight">Baixar Excel</span>
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    )}
+  </AnimatePresence>
 );
