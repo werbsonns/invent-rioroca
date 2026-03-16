@@ -1556,19 +1556,21 @@ const ReportsScreen = ({
       <section>
         <h2 className="text-[13px] font-medium uppercase tracking-wider text-zinc-500 mb-2.5 px-1">Produtividade por Turno</h2>
         <div className="bg-zinc-900 border border-white/5 rounded-2xl p-6 space-y-6 shadow-lg">
-          <div className="grid grid-cols-3 gap-6 items-end h-32 pt-2">
-            {['A', 'B', 'C'].map((s) => {
-              const shiftQuantity = entries
-                .filter(e => e.date >= reportStartDate && e.date <= reportEndDate && e.shift === s)
-                .reduce((acc, curr) => acc + curr.quantity, 0);
+          <div className={`grid ${reportShift === 'Todos' ? 'grid-cols-3' : 'grid-cols-1 max-w-[120px] mx-auto'} gap-6 items-end h-32 pt-2`}>
+            {['A', 'B', 'C']
+              .filter(s => reportShift === 'Todos' || s === reportShift)
+              .map((s) => {
+                const shiftQuantity = entries
+                  .filter(e => e.date >= reportStartDate && e.date <= reportEndDate && e.shift === s)
+                  .reduce((acc, curr) => acc + curr.quantity, 0);
 
-              const maxQuantity = Math.max(...['A', 'B', 'C'].map(shift =>
-                entries
-                  .filter(e => e.date >= reportStartDate && e.date <= reportEndDate && e.shift === shift)
-                  .reduce((acc, curr) => acc + curr.quantity, 0)
-              ), 1);
+                const maxQuantity = Math.max(...['A', 'B', 'C'].map(shift =>
+                  entries
+                    .filter(e => e.date >= reportStartDate && e.date <= reportEndDate && e.shift === shift)
+                    .reduce((acc, curr) => acc + curr.quantity, 0)
+                ), 1);
 
-              const percentage = (shiftQuantity / maxQuantity) * 100;
+                const percentage = (shiftQuantity / maxQuantity) * 100;
 
               return (
                 <div key={s} className="flex flex-col items-center gap-3 h-full justify-end group">
