@@ -387,7 +387,6 @@ export default function App() {
     try {
       // Check for navigator.share BEFORE any awaits or state changes
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        // Close modal first so it doesn't overlap with system share
         setShowShareModal(false);
         setIsSharing(true);
 
@@ -397,9 +396,20 @@ export default function App() {
           text: `Relatório de Produção (${reportStartDate} a ${reportEndDate})`
         });
       } else {
+        // Advanced Fallback for non-supporting browsers (like Desktop Chrome/Windows)
         setShowShareModal(false);
         XLSX.writeFile(wb, fileName);
-        alert('Este dispositivo não permite compartilhar arquivos diretamente. O relatório foi baixado.');
+
+        if (method === 'whatsapp') {
+          const text = encodeURIComponent(`Segue o Relatório de Produção (${reportStartDate} até ${reportEndDate}). O arquivo excel já foi baixado no seu dispositivo.`);
+          window.open(`https://wa.me/?text=${text}`, '_blank');
+        } else if (method === 'email') {
+          const subject = encodeURIComponent('Relatório de Produção');
+          const body = encodeURIComponent(`Olá, segue em anexo o relatório de produção do período ${reportStartDate} até ${reportEndDate}.\n\n(O arquivo foi baixado automaticamente na sua pasta de Downloads)`);
+          window.location.href = `mailto:?subject=${subject}&body=${body}`;
+        } else {
+          alert('Este dispositivo não permite compartilhar arquivos diretamente. O relatório foi baixado com sucesso! 😊');
+        }
       }
     } catch (error: any) {
       console.error('Sharing Error:', error);
@@ -407,16 +417,20 @@ export default function App() {
       
       if (error.name === 'AbortError') return;
 
-      // Handle Permission Denied specifically
-      if (error.name === 'NotAllowedError') {
-        XLSX.writeFile(wb, fileName);
-        alert('O navegador bloqueou o compartilhamento por segurança (permissão negada). O arquivo foi baixado automaticamente!');
-        return;
-      }
-
+      // Handle Permission Denied (NotAllowedError) or other blocks
       const { wb: wbError, fileName: fnError } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
       XLSX.writeFile(wbError, fnError);
-      alert('Não foi possível compartilhar. O arquivo foi baixado como alternativa.');
+
+      if (method === 'whatsapp') {
+        const text = encodeURIComponent(`Relatório de Produção (${reportStartDate} até ${reportEndDate}). O arquivo excel já está nos seus downloads.`);
+        window.open(`https://wa.me/?text=${text}`, '_blank');
+      } else if (method === 'email') {
+        const subject = encodeURIComponent('Relatório de Produção');
+        const body = encodeURIComponent(`Olá, segue o relatório de produção (${reportStartDate} a ${reportEndDate}). O arquivo excel já está nos seus downloads.`);
+        window.location.href = `mailto:?subject=${subject}&body=${body}`;
+      } else {
+        alert('O navegador bloqueou o compartilhamento direto por segurança. O relatório foi baixado e você pode enviá-lo manualmente! ✅');
+      }
     } finally {
       setIsSharing(false);
     }
