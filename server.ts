@@ -141,11 +141,11 @@ app.post("/api/entries", async (req, res) => {
 app.put("/api/entries/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { sku_id, shift, quantity } = req.body;
+    const { sku_id, date, shift, car_number, quantity } = req.body;
     
     await sql`
       UPDATE entries 
-      SET sku_id = ${sku_id}, shift = ${shift}, quantity = ${quantity} 
+      SET sku_id = ${sku_id}, date = ${date}, shift = ${shift}, car_number = ${car_number}, quantity = ${quantity} 
       WHERE id = ${id}
     `;
     res.json({ success: true });

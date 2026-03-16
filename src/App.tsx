@@ -61,12 +61,13 @@ interface ConsultaScreenProps {
   filterShift: string;
   setFilterShift: (val: string) => void;
   entries: Entry[];
-  filteredEntries: Entry[]; // New prop for filtered list
+  filteredEntries: Entry[];
   shiftMap: Record<string, string>;
   showAllEntries: boolean;
   setShowAllEntries: (val: boolean) => void;
   setSuccessMessage: (val: boolean) => void;
   skus: SKU[];
+  setSelectedEntryForDetails: (entry: Entry | null) => void;
 }
 
 interface SKUManagerScreenProps {
@@ -133,9 +134,11 @@ export default function App() {
   const [skuSearch, setSkuSearch] = useState('');
   const [showAddSkuModal, setShowAddSkuModal] = useState(false);
   const [editingSkuId, setEditingSkuId] = useState<number | null>(null);
+  const [showAllEntries, setShowAllEntries] = useState(false);
+  const [selectedEntryForDetails, setSelectedEntryForDetails] = useState<Entry | null>(null);
+
   const [newSkuName, setNewSkuName] = useState('');
   const [newSkuFase, setNewSkuFase] = useState('');
-  const [showAllEntries, setShowAllEntries] = useState(false);
 
   const filteredEntries = React.useMemo(() => {
     return entries.filter(e =>
@@ -407,6 +410,7 @@ export default function App() {
           setShowAllEntries={setShowAllEntries}
           setSuccessMessage={setSuccessMessage}
           skus={skus}
+          setSelectedEntryForDetails={setSelectedEntryForDetails}
         />
       );
       case 'skus': return (
@@ -520,6 +524,111 @@ export default function App() {
         onConfirm={confirmSendEmail}
         isSending={isSendingEmail}
       />
+
+      <AnimatePresence>
+        {selectedEntryForDetails && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedEntryForDetails(null)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 bg-zinc-900 rounded-t-3xl z-[110] p-6 pb-12 max-w-md mx-auto border-t border-white/10"
+            >
+              <div className="w-12 h-1.5 bg-zinc-800 rounded-full mx-auto mb-6" />
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-white mb-1">
+                    Detalhes do Lançamento
+                  </h3>
+                  <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest">
+                    ID #{selectedEntryForDetails.id}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setSelectedEntryForDetails(null)}
+                  className="p-2 -mr-2 text-zinc-500 hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-zinc-800/50 p-4 rounded-2xl border border-white/5">
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Data</p>
+                    <div className="flex items-center gap-2">
+                       <Calendar size={14} className="text-blue-500" />
+                       <p className="text-white font-bold">{new Date(selectedEntryForDetails.date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                    </div>
+                  </div>
+                  <div className="bg-zinc-800/50 p-4 rounded-2xl border border-white/5">
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Turno</p>
+                    <div className="flex items-center gap-2">
+                      <Clock size={14} className="text-blue-500" />
+                      <p className="text-white font-bold">Turno {selectedEntryForDetails.shift}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-zinc-800/50 p-4 rounded-2xl border border-white/5">
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">SKU / Produto</p>
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-xl bg-zinc-800 flex items-center justify-center text-blue-500 shrink-0">
+                      <Package2 size={20} />
+                    </div>
+                    <div>
+                      <p className="text-white font-bold notranslate">{selectedEntryForDetails.sku_name}</p>
+                      <p className="text-zinc-500 text-[11px] font-bold uppercase tracking-tight notranslate">{selectedEntryForDetails.fase || 'Produção'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-zinc-800/50 p-4 rounded-2xl border border-white/5">
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Nº do Carro</p>
+                    <div className="flex items-center gap-2">
+                      <Construction size={14} className="text-blue-500" />
+                      <p className="text-white font-black text-lg">{selectedEntryForDetails.car_number || '-'}</p>
+                    </div>
+                  </div>
+                  <div className="bg-zinc-800/50 p-4 rounded-2xl border border-white/5">
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Quantidade</p>
+                    <div className="flex items-center gap-2">
+                      <BarChart3 size={14} className="text-blue-500" />
+                      <p className="text-white font-black text-xl">{selectedEntryForDetails.quantity} <span className="text-[10px] font-bold text-zinc-500 uppercase ml-0.5">peças</span></p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-black/30 p-3 rounded-xl border border-zinc-800/50 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
+                    <Clock size={12} className="opacity-50" />
+                    Registrado em
+                  </div>
+                  <p className="text-zinc-400 text-[10px] font-bold">
+                    {new Date(selectedEntryForDetails.timestamp).toLocaleString('pt-BR')}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setSelectedEntryForDetails(null)}
+                  className="w-full h-14 bg-zinc-800 text-white rounded-xl font-bold mt-4 active:scale-95 transition-transform"
+                >
+                  Fechar
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -605,6 +714,7 @@ const EmailModal = ({
     )}
   </AnimatePresence>
 );
+
 
 const ApontamentoScreen = ({
   successMessage, setSuccessMessage, date, setDate, shift, setShift,
@@ -747,23 +857,27 @@ const ConsultaScreen = ({
   fetchData, dateInputRef, filterDate, setFilterDate,
   showShiftModal, setShowShiftModal, filterShift, setFilterShift,
   entries, filteredEntries, shiftMap, showAllEntries, setShowAllEntries,
-  setSuccessMessage, skus
+  setSuccessMessage, skus, setSelectedEntryForDetails
 }: ConsultaScreenProps) => {
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
   const [editSkuId, setEditSkuId] = useState<number | ''>('');
+  const [editDate, setEditDate] = useState('');
   const [editShift, setEditShift] = useState('A');
+  const [editCarNumber, setEditCarNumber] = useState('');
   const [editQuantity, setEditQuantity] = useState<number | ''>('');
 
   const handleEditEntryClick = (entry: Entry) => {
     setEditingEntryId(entry.id);
     setEditSkuId(entry.sku_id);
+    setEditDate(entry.date);
     setEditShift(entry.shift);
+    setEditCarNumber(entry.car_number);
     setEditQuantity(entry.quantity);
   };
 
   const handleSaveEditEntry = async () => {
-    if (!editSkuId || editQuantity === '' || editQuantity <= 0) {
-      alert('Por favor, preencha o SKU e uma quantidade válida.');
+    if (!editSkuId || !editDate || editQuantity === '' || editQuantity <= 0) {
+      alert('Por favor, preencha a Data, SKU e uma quantidade válida.');
       return;
     }
 
@@ -773,7 +887,9 @@ const ConsultaScreen = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sku_id: editSkuId,
+          date: editDate,
           shift: editShift,
+          car_number: editCarNumber,
           quantity: editQuantity
         })
       });
@@ -905,7 +1021,11 @@ const ConsultaScreen = ({
               </div>
               <div className="divide-y divide-zinc-800 max-h-64 overflow-y-auto no-scrollbar">
                 {displayedEntries.map((entry) => (
-                  <div key={entry.id} className="grid grid-cols-[1fr_2fr_1fr_1fr_auto] items-center px-5 py-4 active:bg-zinc-800 transition-colors gap-2">
+                  <div 
+                    key={entry.id} 
+                    onClick={() => setSelectedEntryForDetails(entry)}
+                    className="grid grid-cols-[1fr_2fr_1fr_1fr_auto] items-center px-5 py-4 active:bg-zinc-800 hover:bg-zinc-800/50 cursor-pointer transition-colors gap-2"
+                  >
                     <div className="text-xs font-bold text-zinc-400">
                       {new Date(entry.date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                     </div>
@@ -918,14 +1038,20 @@ const ConsultaScreen = ({
                     <div className="text-right text-blue-500 font-bold text-base">{entry.quantity}</div>
                     <div className="w-14 flex justify-end gap-1">
                       <button 
-                        onClick={() => handleEditEntryClick(entry)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditEntryClick(entry);
+                        }}
                         className="text-zinc-600 hover:text-blue-500 active:text-blue-600 transition-colors p-1"
                         title="Editar"
                       >
                         <Edit2 size={16} />
                       </button>
                       <button 
-                        onClick={() => handleDeleteEntry(entry.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteEntry(entry.id);
+                        }}
                         className="text-zinc-600 hover:text-red-500 active:text-red-600 transition-colors p-1"
                         title="Excluir"
                       >
@@ -1066,6 +1192,19 @@ const ConsultaScreen = ({
 
               <div className="space-y-4">
                 <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase ml-1">Data</label>
+                  <div className="relative flex items-center">
+                    <input
+                      className="w-full h-12 bg-zinc-800 border-none rounded-xl px-4 text-white focus:ring-2 focus:ring-blue-500 appearance-none"
+                      type="date"
+                      value={editDate}
+                      onChange={(e) => setEditDate(e.target.value)}
+                    />
+                    <Calendar size={18} className="absolute right-4 text-zinc-500 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-zinc-500 uppercase ml-1">SKU</label>
                   <div className="relative flex items-center">
                     <select
@@ -1095,6 +1234,17 @@ const ConsultaScreen = ({
                       </button>
                     ))}
                   </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-zinc-500 uppercase ml-1">Nº do Carro</label>
+                  <input
+                    className="w-full h-12 bg-zinc-800 border-none rounded-xl px-4 text-white placeholder:text-zinc-600 focus:ring-2 focus:ring-blue-500"
+                    placeholder="Digite o número"
+                    type="text"
+                    value={editCarNumber}
+                    onChange={(e) => setEditCarNumber(e.target.value)}
+                  />
                 </div>
 
                 <div className="space-y-1.5">
