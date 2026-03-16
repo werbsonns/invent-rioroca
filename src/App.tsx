@@ -372,47 +372,51 @@ export default function App() {
 
     if (filteredEntries.length === 0) return;
 
-    setIsSharing(true);
-    setShowShareModal(false);
+    // Generate everything BEFORE state changes to keep user activation "fresh"
+    const { wb, fileName } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    const file = new File([new Blob([wbout], { type: mimeType })], fileName, { type: mimeType });
+
+    if (method === 'download') {
+      setShowShareModal(false);
+      XLSX.writeFile(wb, fileName);
+      return;
+    }
 
     try {
-      const { wb, fileName } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
-      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      const file = new File([new Blob([wbout], { type: mimeType })], fileName, { type: mimeType });
+      // Check for navigator.share BEFORE any awaits or state changes
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        // Close modal first so it doesn't overlap with system share
+        setShowShareModal(false);
+        setIsSharing(true);
 
-      if (method === 'download') {
+        await navigator.share({
+          files: [file],
+          title: 'Relatório de Produção',
+          text: `Relatório de Produção (${reportStartDate} a ${reportEndDate})`
+        });
+      } else {
+        setShowShareModal(false);
         XLSX.writeFile(wb, fileName);
+        alert('Este dispositivo não permite compartilhar arquivos diretamente. O relatório foi baixado.');
+      }
+    } catch (error: any) {
+      console.error('Sharing Error:', error);
+      setShowShareModal(false);
+      
+      if (error.name === 'AbortError') return;
+
+      // Handle Permission Denied specifically
+      if (error.name === 'NotAllowedError') {
+        XLSX.writeFile(wb, fileName);
+        alert('O navegador bloqueou o compartilhamento por segurança (permissão negada). O arquivo foi baixado automaticamente!');
         return;
       }
 
-      if (method === 'system' || method === 'whatsapp' || method === 'email') {
-        // WhatsApp and Email via Web Share API if supported
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            title: 'Relatório de Produção',
-            text: `Relatório de Produção (${reportStartDate} a ${reportEndDate})`
-          });
-        } else {
-          // Fallback if system share not available for files
-          XLSX.writeFile(wb, fileName);
-          alert('Seu navegador não suporta compartilhamento de arquivos. O relatório foi baixado automaticamente.');
-        }
-      }
-    } catch (error: any) {
-      console.error('Full sharing error object:', error);
-      if (error.name === 'AbortError') return;
-      
-      const { wb, fileName } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
-      XLSX.writeFile(wb, fileName);
-      
-      // More descriptive error message for debugging
-      let debugMsg = 'Não foi possível compartilhar direto.';
-      if (error.name) debugMsg += `\nErro: ${error.name}`;
-      if (error.message) debugMsg += `\nDetalhe: ${error.message}`;
-      
-      alert(debugMsg + '\n\nO arquivo foi baixado automaticamente para sua segurança.');
+      const { wb: wbError, fileName: fnError } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
+      XLSX.writeFile(wbError, fnError);
+      alert('Não foi possível compartilhar. O arquivo foi baixado como alternativa.');
     } finally {
       setIsSharing(false);
     }
