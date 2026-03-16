@@ -1,6 +1,5 @@
 import express from "express";
 import { sql } from "@vercel/postgres";
-import nodemailer from "nodemailer";
 
 // Load environment variables locally if not injected
 if (process.env.NODE_ENV !== "production") {
@@ -162,46 +161,6 @@ app.get("/api/stats", async (req, res) => {
     res.json({ total: parseInt(rows[0].sum) || 0 });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
-  }
-});
-
-app.post("/api/send-email", async (req, res) => {
-  try {
-    const { to, subject, body, attachment, fileName } = req.body;
-
-    if (!to || !attachment) {
-      return res.status(400).json({ error: "E-mail do destinatário e anexo são obrigatórios." });
-    }
-
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: process.env.SMTP_SECURE === "true",
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    const mailOptions = {
-      from: `"InventoryPro" <${process.env.SMTP_USER}>`,
-      to,
-      subject: subject || "Relatório de Produção - InventoryPro",
-      text: body || "Olá, segue em anexo o relatório de produção solicitado.",
-      attachments: [
-        {
-          filename: fileName || "relatorio.xlsx",
-          content: attachment,
-          encoding: 'base64'
-        },
-      ],
-    };
-
-    await transporter.sendMail(mailOptions);
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error("Error sending email:", err);
-    res.status(500).json({ error: "Erro ao enviar e-mail: " + err.message });
   }
 });
 

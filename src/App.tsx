@@ -25,8 +25,7 @@ import {
   Ruler,
   Trash2,
   Edit2,
-  Mail,
-  Send,
+  Share2,
   Table as TableIcon,
   Search,
   Filter,
@@ -92,16 +91,17 @@ interface SKUManagerScreenProps {
 
 interface ReportsScreenProps {
   setActiveTab: (val: Tab) => void;
-  reportStartDateRef: React.RefObject<HTMLInputElement>;
+  reportStartDateRef: React.RefObject<HTMLInputElement | null>;
   reportStartDate: string;
   setReportStartDate: (val: string) => void;
-  reportEndDateRef: React.RefObject<HTMLInputElement>;
+  reportEndDateRef: React.RefObject<HTMLInputElement | null>;
   reportEndDate: string;
   setReportEndDate: (val: string) => void;
   entries: Entry[];
   shiftMap: Record<string, string>;
   handleExportExcel: () => void;
-  handleSendEmail: () => void;
+  handleShareReport: () => void;
+  isSharing: boolean;
   reportShift: string;
   setReportShift: (val: string) => void;
 }
@@ -132,12 +132,10 @@ export default function App() {
   const reportEndDateRef = useRef<HTMLInputElement>(null);
 
   // Reports State
-  const [reportStartDate, setReportStartDate] = useState<string>(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [reportStartDate, setReportStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [reportEndDate, setReportEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [reportShift, setReportShift] = useState<string>('Todos');
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [emailForReport, setEmailForReport] = useState('');
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
 
   // SKU Management State
   const [skuSearch, setSkuSearch] = useState('');
@@ -340,21 +338,7 @@ export default function App() {
     setTimeout(() => setSuccessMessage(false), 3000);
   };
 
-  const handleSendEmail = () => {
-    setShowEmailModal(true);
-  };
-
-  const confirmSendEmail = async () => {
-    if (!emailForReport) {
-      alert('Por favor, digite um e-mail válido.');
-      return;
-    }
-
-    setIsSendingEmail(true);
-
-    // Simulate sending delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
+  const handleShareReport = async () => {
     const filteredEntries = entries.filter(e => 
       e.date >= reportStartDate && 
       e.date <= reportEndDate && 
@@ -363,56 +347,50 @@ export default function App() {
 
     if (filteredEntries.length === 0) {
       alert('Nenhum dado encontrado para o período selecionado.');
-      setIsSendingEmail(false);
       return;
     }
 
-    const dataToExport = filteredEntries.map(e => ({
-      'Data': new Date(e.date + 'T12:00:00').toLocaleDateString('pt-BR'),
-      'SKU': e.sku_name,
-      'Fase': e.fase || '-',
-      'Turno': shiftMap[e.shift] || e.shift,
-      'Carro': e.car_number,
-      'Quantidade': e.quantity
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(dataToExport);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Produção');
-
-    const fileName = `Producao_${reportStartDate}_ate_${reportEndDate}.xlsx`;
-    
-    // Generate base64 content
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+    setIsSharing(true);
 
     try {
-      const response = await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: emailForReport,
-          subject: `Relatório de Produção (${reportStartDate} a ${reportEndDate})`,
-          body: `Olá,\n\nSegue em anexo o relatório de produção referente ao período de ${reportStartDate} até ${reportEndDate}.\n\nFiltro de Turno: ${reportShift}.\n\nAtenciosamente,\nInventoryPro`,
-          attachment: wbout,
-          fileName: fileName
-        })
-      });
+      const dataToExport = filteredEntries.map(e => ({
+        'Data': new Date(e.date + 'T12:00:00').toLocaleDateString('pt-BR'),
+        'SKU': e.sku_name,
+        'Fase': e.fase || '-',
+        'Turno': shiftMap[e.shift] || e.shift,
+        'Carro': e.car_number,
+        'Quantidade': e.quantity
+      }));
 
-      if (response.ok) {
-        setIsSendingEmail(false);
-        setShowEmailModal(false);
-        setEmailForReport('');
-        setSuccessMessage(true);
-        setTimeout(() => setSuccessMessage(false), 3000);
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Produção');
+
+      const fileName = `Producao_${reportStartDate}_ate_${reportEndDate}.xlsx`;
+      
+      // Generate Excel as arraybuffer
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const file = new File([blob], fileName, { type: blob.type });
+
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Relatório de Produção',
+          text: `Relatório de ${reportStartDate} até ${reportEndDate}`
+        });
       } else {
-        const errData = await response.json();
-        alert('Erro ao enviar e-mail: ' + (errData.error || 'Erro desconhecido'));
-        setIsSendingEmail(false);
+        // Fallback to download if sharing is not supported
+        XLSX.writeFile(wb, fileName);
+        alert('Seu navegador não suporta compartilhamento de arquivos. O relatório foi baixado automaticamente.');
       }
     } catch (error) {
-      console.error('Error sending email:', error);
-      alert('Erro de conexão ao enviar e-mail.');
-      setIsSendingEmail(false);
+      console.error('Error sharing report:', error);
+      if ((error as any).name !== 'AbortError') {
+        alert('Erro ao compartilhar o relatório.');
+      }
+    } finally {
+      setIsSharing(false);
     }
   };
 
@@ -489,7 +467,8 @@ export default function App() {
           entries={entries}
           shiftMap={shiftMap}
           handleExportExcel={handleExportExcel}
-          handleSendEmail={handleSendEmail}
+          handleShareReport={handleShareReport}
+          isSharing={isSharing}
           reportShift={reportShift}
           setReportShift={setReportShift}
         />
@@ -565,14 +544,6 @@ export default function App() {
       </nav>
 
       <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-32 h-1.5 bg-zinc-800 rounded-full"></div>
-      <EmailModal
-        isOpen={showEmailModal}
-        onClose={() => setShowEmailModal(false)}
-        email={emailForReport}
-        setEmail={setEmailForReport}
-        onConfirm={confirmSendEmail}
-        isSending={isSendingEmail}
-      />
 
       <AnimatePresence>
         {selectedEntryForDetails && (
@@ -682,87 +653,6 @@ export default function App() {
   );
 }
 
-const EmailModal = ({
-  isOpen, onClose, email, setEmail, onConfirm, isSending
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  email: string;
-  setEmail: (val: string) => void;
-  onConfirm: () => void;
-  isSending: boolean;
-}) => (
-  <AnimatePresence>
-    {isOpen && (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        />
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.9, y: 20 }}
-          className="relative w-full max-w-sm bg-zinc-900 border border-white/10 rounded-3xl p-6 shadow-2xl overflow-hidden"
-        >
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-blue-400 to-blue-600"></div>
-
-          <div className="flex justify-between items-start mb-6">
-            <div className="size-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500">
-              <Mail size={24} />
-            </div>
-            <button onClick={onClose} className="p-2 -mr-2 text-zinc-500 hover:text-white transition-colors">
-              <X size={20} />
-            </button>
-          </div>
-
-          <h2 className="text-xl font-bold text-white mb-2">Enviar Relatório</h2>
-          <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
-            Digite o endereço de e-mail do destinatário para enviar o relatório de produção em Excel.
-          </p>
-
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-zinc-500 ml-1 uppercase tracking-widest">E-mail</label>
-              <input
-                autoFocus
-                type="email"
-                className="w-full h-12 bg-black/50 border border-white/10 rounded-xl px-4 text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder:text-zinc-700"
-                placeholder="exemplo@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-
-            <button
-              onClick={onConfirm}
-              disabled={isSending || !email}
-              className={`w-full h-14 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all ${isSending || !email
-                ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                : 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 active:scale-[0.98] hover:bg-blue-500'
-                }`}
-            >
-              {isSending ? (
-                <>
-                  <RefreshCcw size={20} className="animate-spin" />
-                  <span>Enviando...</span>
-                </>
-              ) : (
-                <>
-                  <Send size={20} />
-                  <span>Enviar Agora</span>
-                </>
-              )}
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    )}
-  </AnimatePresence>
-);
 
 
 const ApontamentoScreen = ({
@@ -1575,7 +1465,7 @@ const SKUManagerScreen = ({
 const ReportsScreen = ({
   setActiveTab, reportStartDateRef, reportStartDate, setReportStartDate,
   reportEndDateRef, reportEndDate, setReportEndDate, entries, shiftMap,
-  handleExportExcel, handleSendEmail, reportShift, setReportShift
+  handleExportExcel, handleShareReport, isSharing, reportShift, setReportShift
 }: ReportsScreenProps) => (
   <div className="flex flex-col h-full overflow-hidden">
     <header className="flex items-center bg-black/80 backdrop-blur-md px-4 py-12 border-b border-white/10 sticky top-0 z-20">
@@ -1586,7 +1476,7 @@ const ReportsScreen = ({
       <div className="w-10"></div>
     </header>
 
-    <main className="flex-1 overflow-y-auto px-4 py-6 space-y-8">
+    <main className="flex-1 overflow-y-auto px-4 py-6 space-y-8 no-scrollbar">
       <section>
         <h2 className="text-[13px] font-medium uppercase tracking-wider text-zinc-500 mb-2.5 px-1">Período de Exportação</h2>
         <div className="bg-zinc-900 rounded-2xl p-4 space-y-4">
@@ -1721,30 +1611,35 @@ const ReportsScreen = ({
         <div className="flex justify-between items-end">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(0,122,255,0.5)]"></div>
-            <p className="text-sm font-medium text-zinc-500">Preparando dados para exportação</p>
+            <p className="text-sm font-medium text-zinc-500">Pronto para exportar</p>
           </div>
-          <p className="text-xs font-bold text-blue-500">85%</p>
+          <p className="text-xs font-bold text-blue-500">100%</p>
         </div>
         <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden border border-white/5">
-          <div className="bg-blue-500 h-full w-[85%] rounded-full shadow-[0_0_10px_rgba(0,122,255,0.3)]"></div>
+          <div className="bg-blue-500 h-full w-[100%] rounded-full shadow-[0_0_10px_rgba(0,122,255,0.3)]"></div>
         </div>
       </section>
     </main>
 
     <footer className="bg-black border-t border-white/10 p-4 pb-8 space-y-3">
       <button
-        onClick={handleExportExcel}
-        className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-3 transition-all shadow-lg active:scale-[0.98]"
+        onClick={handleShareReport}
+        disabled={isSharing}
+        className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-3 transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
       >
-        <TableIcon size={22} />
-        <span className="notranslate uppercase tracking-tight">Exportar para Excel (.xlsx)</span>
+        {isSharing ? (
+          <RefreshCcw size={22} className="animate-spin" />
+        ) : (
+          <Share2 size={22} />
+        )}
+        <span className="notranslate uppercase tracking-tight">Compartilhar Relatório</span>
       </button>
       <button
-        onClick={handleSendEmail}
+        onClick={handleExportExcel}
         className="w-full bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-white font-semibold py-4 rounded-xl flex items-center justify-center gap-3 transition-colors active:scale-[0.98]"
       >
-        <Mail size={22} className="text-zinc-500" />
-        <span className="notranslate uppercase tracking-tight">Enviar por E-mail</span>
+        <TableIcon size={22} className="text-zinc-500" />
+        <span className="notranslate uppercase tracking-tight">Baixar Excel (.xlsx)</span>
       </button>
     </footer>
   </div>
