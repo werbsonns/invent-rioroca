@@ -25,15 +25,11 @@ import {
   Ruler,
   Trash2,
   Edit2,
-  Share2,
   Table as TableIcon,
   Search,
   Filter,
   Cloud,
-  MessageCircle,
-  Download,
-  Smartphone,
-  Mail
+  Download
 } from 'lucide-react';
 import { SKU, Entry, Tab } from './types';
 
@@ -104,8 +100,6 @@ interface ReportsScreenProps {
   entries: Entry[];
   shiftMap: Record<string, string>;
   handleExportExcel: () => void;
-  handleShareReport: () => void;
-  isSharing: boolean;
   reportShift: string;
   setReportShift: (val: string) => void;
 }
@@ -139,8 +133,6 @@ export default function App() {
   const [reportStartDate, setReportStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [reportEndDate, setReportEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [reportShift, setReportShift] = useState<string>('Todos');
-  const [isSharing, setIsSharing] = useState(false);
-  const [showShareModal, setShowShareModal] = useState(false);
 
   // SKU Management State
   const [skuSearch, setSkuSearch] = useState('');
@@ -348,92 +340,7 @@ export default function App() {
     return { wb, fileName };
   };
 
-  const handleShareReport = async () => {
-    const filteredEntries = entries.filter(e => 
-      e.date >= reportStartDate && 
-      e.date <= reportEndDate && 
-      (reportShift === 'Todos' || e.shift === reportShift)
-    );
 
-    if (filteredEntries.length === 0) {
-      alert('Nenhum dado encontrado para o período selecionado.');
-      return;
-    }
-
-    setShowShareModal(true);
-  };
-
-  const confirmShare = async (method: 'whatsapp' | 'email' | 'system' | 'download') => {
-    const filteredEntries = entries.filter(e => 
-      e.date >= reportStartDate && 
-      e.date <= reportEndDate && 
-      (reportShift === 'Todos' || e.shift === reportShift)
-    );
-
-    if (filteredEntries.length === 0) return;
-
-    // 1. Generate core file synchronously
-    const { wb, fileName } = generateReportExcel(filteredEntries, reportStartDate, reportEndDate);
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    const file = new File([wbout], fileName, { type: mimeType });
-
-    if (method === 'download') {
-      setShowShareModal(false);
-      XLSX.writeFile(wb, fileName);
-      return;
-    }
-
-    // 2. Direct Share (Primary Path)
-    if (navigator.share) {
-      try {
-        // REQUIRED: Files share often fails on mobile if not HTTPS
-        if (!window.isSecureContext && window.location.hostname !== 'localhost') {
-          throw new Error('SECURITY_LIMITATION');
-        }
-
-        await navigator.share({
-          files: [file]
-          // title removed to minimize payload for some apps
-        });
-        
-        setShowShareModal(false);
-        return;
-      } catch (error: any) {
-        console.error('Share Error:', error);
-        if (error.name === 'AbortError') {
-          setShowShareModal(false);
-          return;
-        }
-        
-        if (error.message === 'SECURITY_LIMITATION' || error.name === 'NotAllowedError') {
-          setShowShareModal(false);
-          XLSX.writeFile(wb, fileName);
-          alert('🚫 O seu navegador não permite anexar arquivos SEM HTTPS.\n\nO arquivo foi BAIXADO. Você precisa clicar no ícone de "clipe" ou "mais" no WhatsApp e escolher este arquivo que acabou de baixar.');
-          
-          if (method === 'whatsapp') {
-            const text = encodeURIComponent('Olá, estou enviando o Relatório de Produção. O arquivo excel acabou de ser baixado no seu dispositivo.');
-            window.open(`https://wa.me/?text=${text}`, '_blank');
-          }
-          return;
-        }
-      }
-    }
-
-    // 3. General Fallback
-    setShowShareModal(false);
-    XLSX.writeFile(wb, fileName);
-    
-    if (method === 'whatsapp') {
-      const text = encodeURIComponent(`Segue o Relatório. O arquivo excel foi BAIXADO, basta anexá-lo agora! ✅`);
-      window.open(`https://wa.me/?text=${text}`, '_blank');
-    } else if (method === 'email') {
-      const subject = encodeURIComponent('Relatório de Produção');
-      window.location.href = `mailto:?subject=${subject}&body=O arquivo foi baixado no seu dispositivo.`;
-    } else {
-      alert('Seu dispositivo não permite enviar o arquivo direto. Ele foi salvo nos seus Downloads! ✅');
-    }
-  };
 
   const renderTab = () => {
     switch (activeTab) {
@@ -508,8 +415,6 @@ export default function App() {
           entries={entries}
           shiftMap={shiftMap}
           handleExportExcel={handleExportExcel}
-          handleShareReport={handleShareReport}
-          isSharing={isSharing}
           reportShift={reportShift}
           setReportShift={setReportShift}
         />
@@ -585,11 +490,7 @@ export default function App() {
       </nav>
 
       <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-32 h-1.5 bg-zinc-800 rounded-full"></div>
-      <ShareModal
-        isOpen={showShareModal}
-        onClose={() => setShowShareModal(false)}
-        onShare={confirmShare}
-      />
+
 
       <AnimatePresence>
         {selectedEntryForDetails && (
@@ -1511,7 +1412,7 @@ const SKUManagerScreen = ({
 const ReportsScreen = ({
   setActiveTab, reportStartDateRef, reportStartDate, setReportStartDate,
   reportEndDateRef, reportEndDate, setReportEndDate, entries, shiftMap,
-  handleExportExcel, handleShareReport, isSharing, reportShift, setReportShift
+  handleExportExcel, reportShift, setReportShift
 }: ReportsScreenProps) => (
   <div className="flex flex-col h-full overflow-hidden">
     <header className="flex items-center bg-black/80 backdrop-blur-md px-4 py-12 border-b border-white/10 sticky top-0 z-20">
@@ -1668,18 +1569,7 @@ const ReportsScreen = ({
     </main>
 
     <footer className="bg-black border-t border-white/10 p-4 pb-8 space-y-3">
-      <button
-        onClick={handleShareReport}
-        disabled={isSharing}
-        className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-3 transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
-      >
-        {isSharing ? (
-          <RefreshCcw size={22} className="animate-spin" />
-        ) : (
-          <Share2 size={22} />
-        )}
-        <span className="notranslate uppercase tracking-tight">Compartilhar Relatório</span>
-      </button>
+
       <button
         onClick={handleExportExcel}
         className="w-full bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-white font-semibold py-4 rounded-xl flex items-center justify-center gap-3 transition-colors active:scale-[0.98]"
@@ -1691,88 +1581,4 @@ const ReportsScreen = ({
   </div>
 );
 
-const ShareModal = ({
-  isOpen, onClose, onShare
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onShare: (method: 'whatsapp' | 'email' | 'system' | 'download') => void;
-}) => (
-  <AnimatePresence>
-    {isOpen && (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        />
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.9, y: 20 }}
-          className="relative w-full max-w-sm bg-zinc-900 border border-white/10 rounded-3xl p-6 shadow-2xl overflow-hidden"
-        >
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-blue-400 to-blue-600"></div>
 
-          <div className="flex justify-between items-start mb-6">
-            <div className="size-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500">
-              <Share2 size={24} />
-            </div>
-            <button onClick={onClose} className="p-2 -mr-2 text-zinc-500 hover:text-white transition-colors">
-              <X size={20} />
-            </button>
-          </div>
-
-          <h2 className="text-xl font-bold text-white mb-2">Compartilhar Relatório</h2>
-          <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
-            Escolha como deseja enviar o arquivo Excel do relatório de produção.
-          </p>
-
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => onShare('whatsapp')}
-              className="flex flex-col items-center justify-center gap-3 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-white/5 rounded-2xl transition-all active:scale-95 group"
-            >
-              <div className="size-10 rounded-xl bg-green-500/20 flex items-center justify-center text-green-500 group-hover:scale-110 transition-transform">
-                <MessageCircle size={22} />
-              </div>
-              <span className="text-xs font-bold text-white uppercase tracking-tight">WhatsApp</span>
-            </button>
-
-            <button
-              onClick={() => onShare('email')}
-              className="flex flex-col items-center justify-center gap-3 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-white/5 rounded-2xl transition-all active:scale-95 group"
-            >
-              <div className="size-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
-                <Mail size={22} />
-              </div>
-              <span className="text-xs font-bold text-white uppercase tracking-tight">E-mail</span>
-            </button>
-
-            <button
-              onClick={() => onShare('system')}
-              className="flex flex-col items-center justify-center gap-3 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-white/5 rounded-2xl transition-all active:scale-95 group"
-            >
-              <div className="size-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-500 group-hover:scale-110 transition-transform">
-                <Smartphone size={22} />
-              </div>
-              <span className="text-xs font-bold text-white uppercase tracking-tight">Bluetooth / Mais</span>
-            </button>
-
-            <button
-              onClick={() => onShare('download')}
-              className="flex flex-col items-center justify-center gap-3 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-white/5 rounded-2xl transition-all active:scale-95 group"
-            >
-              <div className="size-10 rounded-xl bg-zinc-500/20 flex items-center justify-center text-zinc-400 group-hover:scale-110 transition-transform">
-                <Download size={22} />
-              </div>
-              <span className="text-xs font-bold text-white uppercase tracking-tight">Baixar Excel</span>
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    )}
-  </AnimatePresence>
-);
